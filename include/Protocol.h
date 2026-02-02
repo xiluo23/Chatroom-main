@@ -60,20 +60,6 @@ inline string encodeMessage(const string& message) {
  * @param buffer_len 缓冲区中已有数据的长度
  * @param message 存储提取的消息（不包括长度前缀）
  * @return -1: 数据不完整，需要继续接收; >=0: 消费的字节数
- * 
- * 使用例:
- * while (true) {
- *     int consumed = extractMessage(buffer, len, msg);
- *     if (consumed < 0) {
- *         // 需要继续接收
- *         break;
- *     }
- *     // 处理msg...
- *     
- *     // 移动缓冲区
- *     len -= consumed;
- *     memmove(buffer, buffer + consumed, len);
- * }
  */
 inline int extractMessage(const char* buffer, size_t buffer_len, string& message) {
     // 检查是否有完整的头部

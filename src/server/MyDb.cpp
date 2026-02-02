@@ -82,20 +82,20 @@ bool MyDb::exeSQL(string sql){
     if(result){
         int num_fields=mysql_num_fields(result);
         ull num_rows=mysql_num_rows(result);
-        for(ull i=0;i<num_rows;i++){
-            MYSQL_ROW row=mysql_fetch_row(result);  // 使用局部变量
-            if(!row){
-                break;
-            }
-            for(int j=0;j<num_fields;j++){
-                cout<<row[j]<<"\t\t";
-            }
-            cout<<'\n';
-        }
+        LOG_DEBUG("exeSQL fetched " + to_string(num_rows) + " rows");
         mysql_free_result(result);
     }
     //update,insert,del
     return true;
+}
+
+long long MyDb::get_last_insert_id(){
+    if(mysql==NULL){
+        LOG_ERROR("MySQL connection not initialized",ERR_DB_CONNECTION_FAIL);
+        return -1;
+    }
+    unsigned long long id = mysql_insert_id(mysql);
+    return (long long)id;
 }
 
 bool MyDb::select_one_SQL(string sql, string& str) {

@@ -291,3 +291,312 @@
 [2026-02-02 00:21:44] [DEBUG] [TID:136206264235712] select_many_SQL fetched 0 rows
 [2026-02-02 00:21:54] [DEBUG] [TID:136206264235712] select_many_SQL fetched 0 rows
 [2026-02-02 00:22:04] [DEBUG] [TID:136206264235712] select_many_SQL fetched 0 rows
+[2026-02-02 15:18:09] [INFO ] [TID:137088079557760] Logger initialized successfully
+[2026-02-02 15:18:09] [INFO ] [TID:137088079557760] ========Chatroom Server Statring========
+[2026-02-02 15:18:09] [INFO ] [TID:137088079557760] connect redis-server success!
+[2026-02-02 15:18:09] [INFO ] [TID:137088079557760] Server socket buffers configured: SNDbuf=262144, RCVbuf=262144
+[2026-02-02 15:18:09] [INFO ] [TID:137088079557760] Server starting
+[2026-02-02 15:18:09] [INFO ] [TID:137088079557760] Epoll server started successfully, waiting for connections...
+[2026-02-02 15:18:09] [INFO ] [TID:137087906928320] Database connected successfully: Chatroom
+[2026-02-02 15:18:19] [DEBUG] [TID:137087906928320] select_many_SQL fetched 0 rows
+[2026-02-02 15:18:29] [DEBUG] [TID:137087906928320] select_many_SQL fetched 0 rows
+[2026-02-02 15:18:39] [DEBUG] [TID:137087906928320] select_many_SQL fetched 0 rows
+[2026-02-02 15:18:49] [DEBUG] [TID:137087906928320] select_many_SQL fetched 0 rows
+[2026-02-02 15:18:58] [INFO ] [TID:132208849949824] Logger initialized successfully
+[2026-02-02 15:18:58] [INFO ] [TID:132208849949824] ========Chatroom Server Statring========
+[2026-02-02 15:18:58] [INFO ] [TID:132208849949824] connect redis-server success!
+[2026-02-02 15:18:58] [INFO ] [TID:132208849949824] Server socket buffers configured: SNDbuf=262144, RCVbuf=262144
+[2026-02-02 15:18:58] [INFO ] [TID:132208849949824] Server starting
+[2026-02-02 15:18:58] [INFO ] [TID:132208849949824] Epoll server started successfully, waiting for connections...
+[2026-02-02 15:18:58] [INFO ] [TID:132208685668032] Database connected successfully: Chatroom
+[2026-02-02 15:18:59] [DEBUG] [TID:137087906928320] select_many_SQL fetched 0 rows
+[2026-02-02 15:19:08] [DEBUG] [TID:132208685668032] select_many_SQL fetched 0 rows
+[2026-02-02 15:19:09] [DEBUG] [TID:137087906928320] select_many_SQL fetched 0 rows
+[2026-02-02 15:19:18] [DEBUG] [TID:132208685668032] select_many_SQL fetched 0 rows
+[2026-02-02 15:19:19] [DEBUG] [TID:137087906928320] select_many_SQL fetched 0 rows
+[2026-02-02 15:19:28] [DEBUG] [TID:132208685668032] select_many_SQL fetched 0 rows
+[2026-02-02 15:19:29] [DEBUG] [TID:137087906928320] select_many_SQL fetched 0 rows
+[2026-02-02 15:19:38] [DEBUG] [TID:132208685668032] select_many_SQL fetched 0 rows
+[2026-02-02 15:19:38] [INFO ] [TID:137088079557760] New client connected: FD=26
+[2026-02-02 15:19:39] [DEBUG] [TID:137087906928320] select_many_SQL fetched 0 rows
+[2026-02-02 15:19:46] [INFO ] [TID:137088057996992] Operation - UserID: 1009 | Op: login | Details: username: Alb
+[2026-02-02 15:19:46] [INFO ] [TID:137088057996992] Subscribed Redis channel for user_id=1009
+[2026-02-02 15:19:46] [DEBUG] [TID:137088057996992] select_many_SQL fetched 0 rows
+[2026-02-02 15:19:48] [DEBUG] [TID:132208685668032] select_many_SQL fetched 0 rows
+[2026-02-02 15:19:49] [DEBUG] [TID:137087906928320] select_many_SQL fetched 0 rows
+[2026-02-02 15:19:58] [DEBUG] [TID:132208685668032] select_many_SQL fetched 0 rows
+[2026-02-02 15:19:59] [DEBUG] [TID:137087906928320] select_many_SQL fetched 0 rows
+[2026-02-02 15:20:08] [DEBUG] [TID:132208685668032] select_many_SQL fetched 0 rows
+[2026-02-02 15:20:09] [DEBUG] [TID:137087906928320] select_many_SQL fetched 0 rows
+[2026-02-02 15:20:18] [DEBUG] [TID:132208685668032] select_many_SQL fetched 0 rows
+[2026-02-02 15:20:19] [DEBUG] [TID:137087906928320] select_many_SQL fetched 0 rows
+[2026-02-02 15:20:24] [INFO ] [TID:137088079557760] New client connected: FD=27
+[2026-02-02 15:20:28] [DEBUG] [TID:132208685668032] select_many_SQL fetched 0 rows
+[2026-02-02 15:20:29] [DEBUG] [TID:137087906928320] select_many_SQL fetched 0 rows
+[2026-02-02 15:20:38] [DEBUG] [TID:132208685668032] select_many_SQL fetched 0 rows
+[2026-02-02 15:20:39] [DEBUG] [TID:137087906928320] select_many_SQL fetched 0 rows
+[2026-02-02 15:20:40] [ERROR] [TID:137088032818880] [ERR:[UNKNOWN] (3002) 未定义的错误码: 3002] Login failed: incorrect password for user Xiluo
+[2026-02-02 15:20:48] [DEBUG] [TID:132208685668032] select_many_SQL fetched 0 rows
+[2026-02-02 15:20:49] [DEBUG] [TID:137087906928320] select_many_SQL fetched 0 rows
+[2026-02-02 15:20:50] [INFO ] [TID:137088007640768] Operation - UserID: 1010 | Op: sign_up | Details: username: Dadd
+[2026-02-02 15:20:58] [DEBUG] [TID:132208685668032] select_many_SQL fetched 0 rows
+[2026-02-02 15:20:58] [INFO ] [TID:137087999248064] Operation - UserID: 1010 | Op: login | Details: username: Dadd
+[2026-02-02 15:20:58] [INFO ] [TID:137087999248064] Subscribed Redis channel for user_id=1010
+[2026-02-02 15:20:58] [DEBUG] [TID:137087999248064] select_many_SQL fetched 0 rows
+[2026-02-02 15:20:59] [DEBUG] [TID:137087906928320] select_many_SQL fetched 0 rows
+[2026-02-02 15:21:08] [DEBUG] [TID:132208685668032] select_many_SQL fetched 0 rows
+[2026-02-02 15:21:09] [DEBUG] [TID:137087906928320] select_many_SQL fetched 0 rows
+[2026-02-02 15:21:18] [DEBUG] [TID:132208685668032] select_many_SQL fetched 0 rows
+[2026-02-02 15:21:19] [DEBUG] [TID:137087906928320] select_many_SQL fetched 0 rows
+[2026-02-02 15:21:28] [DEBUG] [TID:132208685668032] select_many_SQL fetched 0 rows
+[2026-02-02 15:21:29] [DEBUG] [TID:137087906928320] select_many_SQL fetched 0 rows
+[2026-02-02 15:21:38] [DEBUG] [TID:132208685668032] select_many_SQL fetched 0 rows
+[2026-02-02 15:21:39] [DEBUG] [TID:137087906928320] select_many_SQL fetched 0 rows
+[2026-02-02 15:21:48] [DEBUG] [TID:132208685668032] select_many_SQL fetched 0 rows
+[2026-02-02 15:21:49] [DEBUG] [TID:137087906928320] select_many_SQL fetched 0 rows
+[2026-02-02 15:21:54] [INFO ] [TID:137088079557760] New client connected: FD=28
+[2026-02-02 15:21:58] [DEBUG] [TID:132208685668032] select_many_SQL fetched 0 rows
+[2026-02-02 15:21:59] [DEBUG] [TID:137087906928320] select_many_SQL fetched 0 rows
+[2026-02-02 15:22:00] [INFO ] [TID:137088057996992] Operation - UserID: 1011 | Op: sign_up | Details: username: ACC
+[2026-02-02 15:22:04] [INFO ] [TID:137088041211584] Operation - UserID: 1011 | Op: login | Details: username: ACC
+[2026-02-02 15:22:04] [INFO ] [TID:137088041211584] Subscribed Redis channel for user_id=1011
+[2026-02-02 15:22:04] [DEBUG] [TID:137088041211584] select_many_SQL fetched 0 rows
+[2026-02-02 15:22:08] [DEBUG] [TID:132208685668032] select_many_SQL fetched 0 rows
+[2026-02-02 15:22:09] [DEBUG] [TID:137087906928320] select_many_SQL fetched 0 rows
+[2026-02-02 15:22:18] [DEBUG] [TID:132208685668032] select_many_SQL fetched 0 rows
+[2026-02-02 15:22:19] [DEBUG] [TID:137087906928320] select_many_SQL fetched 0 rows
+[2026-02-02 15:22:28] [DEBUG] [TID:132208685668032] select_many_SQL fetched 0 rows
+[2026-02-02 15:22:29] [DEBUG] [TID:137087906928320] select_many_SQL fetched 0 rows
+[2026-02-02 15:22:38] [DEBUG] [TID:132208685668032] select_many_SQL fetched 0 rows
+[2026-02-02 15:22:39] [DEBUG] [TID:137087906928320] select_many_SQL fetched 0 rows
+[2026-02-02 15:22:48] [DEBUG] [TID:132208685668032] select_many_SQL fetched 0 rows
+[2026-02-02 15:22:49] [DEBUG] [TID:137087906928320] select_many_SQL fetched 0 rows
+[2026-02-02 15:22:58] [DEBUG] [TID:132208685668032] select_many_SQL fetched 0 rows
+[2026-02-02 15:22:59] [DEBUG] [TID:137087906928320] select_many_SQL fetched 0 rows
+[2026-02-02 15:23:08] [DEBUG] [TID:132208685668032] select_many_SQL fetched 0 rows
+[2026-02-02 15:23:09] [DEBUG] [TID:137087906928320] select_many_SQL fetched 0 rows
+[2026-02-02 15:23:14] [INFO ] [TID:137088079557760] Client closed connection: FD=26
+[2026-02-02 15:23:14] [INFO ] [TID:137088079557760] Client disconnected: FD=26
+[2026-02-02 15:23:14] [INFO ] [TID:137088079557760] Database connected successfully: Chatroom
+[2026-02-02 15:23:14] [INFO ] [TID:137088079557760] Unsubscribed Redis channel for user_id=1009
+[2026-02-02 15:23:14] [INFO ] [TID:137088079557760] Client disconnected: FD=26
+[2026-02-02 15:23:16] [INFO ] [TID:137088079557760] Client closed connection: FD=27
+[2026-02-02 15:23:16] [INFO ] [TID:137088079557760] Client disconnected: FD=27
+[2026-02-02 15:23:16] [INFO ] [TID:137088079557760] Database connected successfully: Chatroom
+[2026-02-02 15:23:16] [INFO ] [TID:137088079557760] Unsubscribed Redis channel for user_id=1010
+[2026-02-02 15:23:16] [INFO ] [TID:137088079557760] Client disconnected: FD=27
+[2026-02-02 15:23:18] [DEBUG] [TID:132208685668032] select_many_SQL fetched 0 rows
+[2026-02-02 15:23:19] [DEBUG] [TID:137087906928320] select_many_SQL fetched 0 rows
+[2026-02-02 15:23:23] [INFO ] [TID:137088079557760] Client closed connection: FD=28
+[2026-02-02 15:23:23] [INFO ] [TID:137088079557760] Client disconnected: FD=28
+[2026-02-02 15:23:23] [INFO ] [TID:137088079557760] Database connected successfully: Chatroom
+[2026-02-02 15:23:23] [INFO ] [TID:137088079557760] Unsubscribed Redis channel for user_id=1011
+[2026-02-02 15:23:23] [INFO ] [TID:137088079557760] Client disconnected: FD=28
+[2026-02-02 15:23:28] [DEBUG] [TID:132208685668032] select_many_SQL fetched 0 rows
+[2026-02-02 15:23:29] [DEBUG] [TID:137087906928320] select_many_SQL fetched 0 rows
+[2026-02-02 15:23:38] [DEBUG] [TID:132208685668032] select_many_SQL fetched 0 rows
+[2026-02-02 15:23:39] [DEBUG] [TID:137087906928320] select_many_SQL fetched 0 rows
+[2026-02-02 15:23:48] [DEBUG] [TID:132208685668032] select_many_SQL fetched 0 rows
+[2026-02-02 15:23:49] [DEBUG] [TID:137087906928320] select_many_SQL fetched 0 rows
+[2026-02-02 15:23:58] [DEBUG] [TID:132208685668032] select_many_SQL fetched 0 rows
+[2026-02-02 15:23:59] [DEBUG] [TID:137087906928320] select_many_SQL fetched 0 rows
+[2026-02-02 15:24:08] [DEBUG] [TID:132208685668032] select_many_SQL fetched 0 rows
+[2026-02-02 15:24:09] [DEBUG] [TID:137087906928320] select_many_SQL fetched 0 rows
+[2026-02-02 15:30:09] [INFO ] [TID:124092179932288] Logger initialized successfully
+[2026-02-02 15:30:09] [INFO ] [TID:124092179932288] ========Chatroom Server Statring========
+[2026-02-02 15:30:09] [INFO ] [TID:124092179932288] connect redis-server success!
+[2026-02-02 15:30:09] [INFO ] [TID:124092179932288] Server socket buffers configured: SNDbuf=262144, RCVbuf=262144
+[2026-02-02 15:30:09] [INFO ] [TID:124092179932288] Server starting
+[2026-02-02 15:30:09] [INFO ] [TID:124092179932288] Epoll server started successfully, waiting for connections...
+[2026-02-02 15:30:09] [INFO ] [TID:124092006979264] Database connected successfully: Chatroom
+[2026-02-02 15:30:19] [DEBUG] [TID:124092006979264] select_many_SQL fetched 0 rows
+[2026-02-02 15:30:29] [DEBUG] [TID:124092006979264] select_many_SQL fetched 0 rows
+[2026-02-02 15:30:30] [INFO ] [TID:124598440694912] Logger initialized successfully
+[2026-02-02 15:30:30] [INFO ] [TID:124598440694912] ========Chatroom Server Statring========
+[2026-02-02 15:30:30] [INFO ] [TID:124598440694912] connect redis-server success!
+[2026-02-02 15:30:30] [INFO ] [TID:124598440694912] Server socket buffers configured: SNDbuf=262144, RCVbuf=262144
+[2026-02-02 15:30:30] [INFO ] [TID:124598440694912] Server starting
+[2026-02-02 15:30:30] [INFO ] [TID:124598440694912] Epoll server started successfully, waiting for connections...
+[2026-02-02 15:30:30] [INFO ] [TID:124598267860672] Database connected successfully: Chatroom
+[2026-02-02 15:30:39] [DEBUG] [TID:124092006979264] select_many_SQL fetched 0 rows
+[2026-02-02 15:30:40] [DEBUG] [TID:124598267860672] select_many_SQL fetched 0 rows
+[2026-02-02 15:30:49] [DEBUG] [TID:124092006979264] select_many_SQL fetched 0 rows
+[2026-02-02 15:30:50] [DEBUG] [TID:124598267860672] select_many_SQL fetched 0 rows
+[2026-02-02 15:30:55] [INFO ] [TID:124092179932288] New client connected: FD=26
+[2026-02-02 15:30:59] [DEBUG] [TID:124092006979264] select_many_SQL fetched 0 rows
+[2026-02-02 15:31:00] [INFO ] [TID:124092158047936] Operation - UserID: 1010 | Op: login | Details: username: Dadd
+[2026-02-02 15:31:00] [INFO ] [TID:124092158047936] Subscribed Redis channel for user_id=1010
+[2026-02-02 15:31:00] [DEBUG] [TID:124092158047936] select_many_SQL fetched 0 rows
+[2026-02-02 15:31:00] [DEBUG] [TID:124598267860672] select_many_SQL fetched 0 rows
+[2026-02-02 15:31:09] [DEBUG] [TID:124092006979264] select_many_SQL fetched 0 rows
+[2026-02-02 15:31:10] [DEBUG] [TID:124598267860672] select_many_SQL fetched 0 rows
+[2026-02-02 15:31:19] [DEBUG] [TID:124092006979264] select_many_SQL fetched 0 rows
+[2026-02-02 15:31:20] [DEBUG] [TID:124598267860672] select_many_SQL fetched 0 rows
+[2026-02-02 15:31:27] [INFO ] [TID:124598440694912] New client connected: FD=26
+[2026-02-02 15:31:29] [DEBUG] [TID:124092006979264] select_many_SQL fetched 0 rows
+[2026-02-02 15:31:30] [DEBUG] [TID:124598267860672] select_many_SQL fetched 0 rows
+[2026-02-02 15:31:34] [INFO ] [TID:124598418929344] Operation - UserID: 1009 | Op: login | Details: username: Alb
+[2026-02-02 15:31:34] [INFO ] [TID:124598418929344] Subscribed Redis channel for user_id=1009
+[2026-02-02 15:31:34] [DEBUG] [TID:124598418929344] select_many_SQL fetched 0 rows
+[2026-02-02 15:31:39] [DEBUG] [TID:124092006979264] select_many_SQL fetched 0 rows
+[2026-02-02 15:31:40] [DEBUG] [TID:124598267860672] select_many_SQL fetched 0 rows
+[2026-02-02 15:31:49] [DEBUG] [TID:124092006979264] select_many_SQL fetched 0 rows
+[2026-02-02 15:31:50] [DEBUG] [TID:124598267860672] select_many_SQL fetched 0 rows
+[2026-02-02 15:31:52] [DEBUG] [TID:124092124477120] select_many_SQL fetched 2 rows
+[2026-02-02 15:31:59] [DEBUG] [TID:124092006979264] select_many_SQL fetched 0 rows
+[2026-02-02 15:32:00] [DEBUG] [TID:124598267860672] select_many_SQL fetched 0 rows
+[2026-02-02 15:32:03] [DEBUG] [TID:124598284646080] Received Redis message on channel 1009: single_chat|1|122875|Dadd;hello
+[2026-02-02 15:32:09] [DEBUG] [TID:124092006979264] select_many_SQL fetched 0 rows
+[2026-02-02 15:32:10] [DEBUG] [TID:124598267860672] select_many_SQL fetched 0 rows
+[2026-02-02 15:32:13] [ERROR] [TID:124598376965824] [ERR:[UNKNOWN] (2002) 未定义的错误码: 2002] Database Error - SQL: select user_id,user_name from user join user_status on user.user_id = user_status.user_id where is_online = 1 | Error: select_many_SQL query failed
+[2026-02-02 15:32:19] [DEBUG] [TID:124092006979264] select_many_SQL fetched 0 rows
+[2026-02-02 15:32:20] [DEBUG] [TID:124598267860672] select_many_SQL fetched 0 rows
+[2026-02-02 15:32:29] [DEBUG] [TID:124092006979264] select_many_SQL fetched 0 rows
+[2026-02-02 15:32:30] [DEBUG] [TID:124598267860672] select_many_SQL fetched 0 rows
+[2026-02-02 15:32:39] [DEBUG] [TID:124092006979264] select_many_SQL fetched 0 rows
+[2026-02-02 15:32:40] [DEBUG] [TID:124598267860672] select_many_SQL fetched 0 rows
+[2026-02-02 15:32:49] [DEBUG] [TID:124092006979264] select_many_SQL fetched 0 rows
+[2026-02-02 15:32:50] [DEBUG] [TID:124598267860672] select_many_SQL fetched 0 rows
+[2026-02-02 15:32:55] [DEBUG] [TID:124092023764672] Received Redis message on channel 1010: multi_chat|2|Alb;HEAAA
+[2026-02-02 15:32:55] [WARN ] [TID:124092074120896] Invalid SUB_MSG payload: multi_chat|2|Alb;HEAAA
+[2026-02-02 15:32:55] [DEBUG] [TID:124092023764672] Received Redis message on channel 1010: multi_chat|2|122876|Alb;HEAAA
+[2026-02-02 15:32:59] [DEBUG] [TID:124092006979264] select_many_SQL fetched 0 rows
+[2026-02-02 15:33:00] [DEBUG] [TID:124598267860672] select_many_SQL fetched 0 rows
+[2026-02-02 15:33:03] [DEBUG] [TID:124598343395008] select_many_SQL fetched 2 rows
+[2026-02-02 15:33:09] [DEBUG] [TID:124092048942784] select_many_SQL fetched 2 rows
+[2026-02-02 15:33:09] [DEBUG] [TID:124092006979264] select_many_SQL fetched 0 rows
+[2026-02-02 15:33:10] [DEBUG] [TID:124598267860672] select_many_SQL fetched 0 rows
+[2026-02-02 15:33:11] [INFO ] [TID:124092179932288] Client closed connection: FD=26
+[2026-02-02 15:33:11] [INFO ] [TID:124092179932288] Client disconnected: FD=26
+[2026-02-02 15:33:11] [INFO ] [TID:124092179932288] Database connected successfully: Chatroom
+[2026-02-02 15:33:11] [INFO ] [TID:124092179932288] Unsubscribed Redis channel for user_id=1010
+[2026-02-02 15:33:11] [INFO ] [TID:124092179932288] Client disconnected: FD=26
+[2026-02-02 15:33:13] [INFO ] [TID:124598440694912] Client closed connection: FD=26
+[2026-02-02 15:33:13] [INFO ] [TID:124598440694912] Client disconnected: FD=26
+[2026-02-02 15:33:13] [INFO ] [TID:124598440694912] Database connected successfully: Chatroom
+[2026-02-02 15:33:13] [INFO ] [TID:124598440694912] Unsubscribed Redis channel for user_id=1009
+[2026-02-02 15:33:13] [INFO ] [TID:124598440694912] Client disconnected: FD=26
+[2026-02-02 15:36:09] [INFO ] [TID:125698275075200] Logger initialized successfully
+[2026-02-02 15:36:09] [INFO ] [TID:125698275075200] ========Chatroom Server Statring========
+[2026-02-02 15:36:09] [INFO ] [TID:125698275075200] connect redis-server success!
+[2026-02-02 15:36:09] [INFO ] [TID:125698275075200] Server socket buffers configured: SNDbuf=262144, RCVbuf=262144
+[2026-02-02 15:36:09] [INFO ] [TID:125698275075200] Server starting
+[2026-02-02 15:36:09] [INFO ] [TID:125698275075200] Epoll server started successfully, waiting for connections...
+[2026-02-02 15:36:09] [INFO ] [TID:125698102449856] Database connected successfully: Chatroom
+[2026-02-02 15:36:13] [INFO ] [TID:132493198521472] Logger initialized successfully
+[2026-02-02 15:36:13] [INFO ] [TID:132493198521472] ========Chatroom Server Statring========
+[2026-02-02 15:36:13] [INFO ] [TID:132493198521472] connect redis-server success!
+[2026-02-02 15:36:13] [INFO ] [TID:132493198521472] Server socket buffers configured: SNDbuf=262144, RCVbuf=262144
+[2026-02-02 15:36:13] [INFO ] [TID:132493198521472] Server starting
+[2026-02-02 15:36:13] [INFO ] [TID:132493198521472] Epoll server started successfully, waiting for connections...
+[2026-02-02 15:36:13] [INFO ] [TID:132493025924800] Database connected successfully: Chatroom
+[2026-02-02 15:36:18] [INFO ] [TID:125698275075200] New client connected: FD=26
+[2026-02-02 15:36:19] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:36:23] [INFO ] [TID:125698253518528] Operation - UserID: 1010 | Op: login | Details: username: Dadd
+[2026-02-02 15:36:23] [INFO ] [TID:125698253518528] Subscribed Redis channel for user_id=1010
+[2026-02-02 15:36:23] [DEBUG] [TID:125698253518528] select_many_SQL fetched 0 rows
+[2026-02-02 15:36:23] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:36:27] [INFO ] [TID:132493198521472] New client connected: FD=26
+[2026-02-02 15:36:29] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:36:33] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:36:34] [ERROR] [TID:132493176993472] [ERR:[UNKNOWN] (3002) 未定义的错误码: 3002] Login failed: incorrect password for user Alb
+[2026-02-02 15:36:39] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:36:39] [INFO ] [TID:132493168600768] Operation - UserID: 1009 | Op: login | Details: username: Alb
+[2026-02-02 15:36:39] [INFO ] [TID:132493168600768] Subscribed Redis channel for user_id=1009
+[2026-02-02 15:36:39] [DEBUG] [TID:132493168600768] select_many_SQL fetched 0 rows
+[2026-02-02 15:36:43] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:36:46] [ERROR] [TID:132493160208064] [ERR:[UNKNOWN] (2002) 未定义的错误码: 2002] Database Error - SQL: select user_id,user_name from user join user_status on user.user_id = user_status.user_id where is_online = 1 | Error: select_many_SQL query failed
+[2026-02-02 15:36:49] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:36:53] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:36:59] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:37:03] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:37:09] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:37:13] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:37:19] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:37:24] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:37:29] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:37:34] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:37:39] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:37:44] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:37:49] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:37:54] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:37:59] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:38:04] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:38:09] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:38:14] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:38:19] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:38:24] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:38:29] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:38:34] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:38:39] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:38:44] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:38:49] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:38:54] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:38:59] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:39:04] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:39:09] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:39:14] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:39:19] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:39:24] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:39:29] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:39:34] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:39:39] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:39:44] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:39:49] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:39:54] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:39:59] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:40:04] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:40:09] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:40:14] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:40:19] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:40:24] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:40:29] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:40:34] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:40:39] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:40:44] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:40:49] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:40:50] [DEBUG] [TID:125698236733120] select_many_SQL fetched 2 rows
+[2026-02-02 15:40:54] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:40:57] [DEBUG] [TID:132493042710208] Received Redis message on channel 1009: single_chat|1|122877|Dadd;1522
+[2026-02-02 15:40:59] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:41:04] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:41:09] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:41:14] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:41:19] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:41:24] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:41:29] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:41:34] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:41:39] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:41:44] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:41:49] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:41:54] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:41:59] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:42:04] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:42:09] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:42:14] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:42:19] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:42:24] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:42:29] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:42:34] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:42:39] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:42:44] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:42:49] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:42:54] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:42:59] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:43:04] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:43:09] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:43:14] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:43:19] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:43:24] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:43:29] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:43:34] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:43:39] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:43:44] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:43:49] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:43:54] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:43:59] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:44:04] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:44:09] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:44:14] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows
+[2026-02-02 15:44:19] [DEBUG] [TID:125698102449856] select_many_SQL fetched 0 rows
+[2026-02-02 15:44:24] [DEBUG] [TID:132493025924800] select_many_SQL fetched 0 rows

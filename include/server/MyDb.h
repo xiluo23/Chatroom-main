@@ -20,6 +20,8 @@ public:
     bool select_many_SQL(string sql,string& str);
     int get_id(const char* name);
     string get_name(int user_id);
+    // 获取最近一次插入的自增ID
+    long long get_last_insert_id();
 };
 
 

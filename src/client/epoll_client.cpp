@@ -216,7 +216,7 @@ bool handle_pipe_input(){
     char msg[BUF_SIZE];
     memset(msg,0,sizeof(msg));
     if(strcmp(buf,"q\n")==0||strcmp(buf,"Q\n")==0){
-        buf[strchr(buf,'\n')]=0;
+        buf[strcspn(buf,"\n")]=0;
         send_message(buf,strlen(buf));
         return false;
     }

@@ -30,9 +30,14 @@
 #define DB_NAME "Chatroom"
 #define PWD "926472"
 
+enum TaskType { CLIENT_MSG = 0, SUB_MSG = 1 };
+
 struct Task{
-    int fd;//clinent_fd
-    string message;
+    int fd; // client_fd (for CLIENT_MSG)
+    string message; // raw message
+    TaskType type = CLIENT_MSG;
+    int channel = 0; // for SUB_MSG: receiver user_id channel
+    long long msg_id = 0; // optional message id for tracking
 };
 struct Response{
     int fd;

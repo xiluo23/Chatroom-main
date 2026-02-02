@@ -1,4 +1,5 @@
 #include "redis.h"
+#include"Logger.h"
 #include <iostream>
 using namespace std;
 
@@ -44,7 +45,7 @@ bool Redis::connect()
     });
     t.detach();
 
-    cout << "connect redis-server success!" << endl;
+    LOG_INFO("connect redis-server success!");
 
     return true;
 }
