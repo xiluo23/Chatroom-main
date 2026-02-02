@@ -1,0 +1,293 @@
+[2026-02-01 22:43:53] [INFO ] [TID:135856940290752] Logger initialized successfully
+[2026-02-01 22:43:53] [INFO ] [TID:135856940290752] ========Chatroom Server Statring========
+[2026-02-01 22:43:53] [INFO ] [TID:135856940290752] Server socket buffers configured: SNDbuf=262144, RCVbuf=262144
+[2026-02-01 22:43:53] [INFO ] [TID:135856940290752] Server starting
+[2026-02-01 22:43:53] [INFO ] [TID:135856940290752] Epoll server started successfully, waiting for connections...
+[2026-02-01 22:43:53] [INFO ] [TID:135856784340672] Database connected successfully: Chatroom
+[2026-02-01 22:44:03] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:44:13] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:44:23] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:44:33] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:44:43] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:44:53] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:45:03] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:45:13] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:45:23] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:45:33] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:45:43] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:45:53] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:46:03] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:46:13] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:46:23] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:46:33] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:46:43] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:46:53] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:47:03] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:47:13] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:47:23] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:47:33] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:47:43] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:47:53] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:48:03] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:48:13] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:48:23] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:48:33] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:48:43] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:48:53] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:49:03] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:49:13] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:49:23] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:49:33] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:49:43] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:49:53] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:50:03] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:50:13] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:50:23] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:50:33] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:50:43] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:50:53] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:51:03] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:51:13] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:51:16] [WARN ] [TID:135856940290752] Failed to set TCP_NODELAY for FD=24
+[2026-02-01 22:51:16] [INFO ] [TID:135856940290752] New client connected: FD=24
+[2026-02-01 22:51:22] [DEBUG] [TID:135856940290752] Extracted message from FD=24: sign_up|Xiluo|123456
+
+[2026-02-01 22:51:22] [DEBUG] [TID:135856940290752] Incomplete message in buffer, FD=24, pos=0
+[2026-02-01 22:51:22] [INFO ] [TID:135856918623936] Operation - UserID: 1008 | Op: sign_up | Details: username: Xiluo
+[2026-02-01 22:51:23] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:51:33] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:51:43] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:51:52] [INFO ] [TID:135856940290752] Client closed connection: FD=24
+[2026-02-01 22:51:52] [INFO ] [TID:135856940290752] Client disconnected: FD=24
+[2026-02-01 22:51:52] [INFO ] [TID:135856940290752] Client disconnected: FD=24
+[2026-02-01 22:51:53] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:52:03] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:52:13] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:52:23] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:52:33] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:52:43] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:52:53] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:53:03] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:53:13] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:53:23] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:53:33] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:53:43] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:53:53] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:54:03] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:54:13] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:54:23] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:54:33] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:54:43] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:54:53] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:55:03] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:55:13] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:55:23] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:55:33] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:55:43] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:55:53] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:56:03] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:56:13] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:56:23] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:56:33] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:56:43] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:56:53] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:57:03] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:57:13] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:57:23] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:57:33] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:57:43] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:57:53] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:58:03] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:58:13] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:58:23] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:58:33] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:58:43] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:58:53] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:59:03] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:59:13] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:59:23] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:59:23] [WARN ] [TID:135856940290752] Failed to set TCP_NODELAY for FD=24
+[2026-02-01 22:59:23] [INFO ] [TID:135856940290752] New client connected: FD=24
+[2026-02-01 22:59:31] [DEBUG] [TID:135856940290752] Extracted message from FD=24: sign_up|Xiluo|123456
+
+[2026-02-01 22:59:31] [DEBUG] [TID:135856940290752] Incomplete message in buffer, FD=24, pos=0
+[2026-02-01 22:59:33] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:59:43] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 22:59:53] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 23:00:03] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 23:00:13] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 23:00:23] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 23:00:33] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 23:00:43] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 23:00:53] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 23:01:03] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 23:01:13] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 23:01:23] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 23:01:33] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 23:01:43] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 23:01:53] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 23:02:03] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 23:02:13] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 23:02:23] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 23:02:33] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 23:02:43] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 23:02:53] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 23:03:03] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 23:03:13] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 23:03:23] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 23:03:33] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 23:03:43] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 23:03:53] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 23:04:03] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 23:04:13] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 23:04:23] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 23:04:33] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 23:04:43] [DEBUG] [TID:135856784340672] select_many_SQL fetched 0 rows
+[2026-02-01 23:23:57] [INFO ] [TID:129999206724288] Logger initialized successfully
+[2026-02-01 23:23:57] [INFO ] [TID:129999206724288] ========Chatroom Server Statring========
+[2026-02-01 23:23:57] [INFO ] [TID:129999206724288] Server socket buffers configured: SNDbuf=262144, RCVbuf=262144
+[2026-02-01 23:23:57] [INFO ] [TID:129999206724288] Server starting
+[2026-02-01 23:23:57] [INFO ] [TID:129999206724288] Epoll server started successfully, waiting for connections...
+[2026-02-01 23:23:57] [INFO ] [TID:129999050831552] Database connected successfully: Chatroom
+[2026-02-01 23:24:07] [WARN ] [TID:129999206724288] Failed to set TCP_NODELAY for FD=24
+[2026-02-01 23:24:07] [INFO ] [TID:129999206724288] New client connected: FD=24
+[2026-02-01 23:24:07] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:24:16] [DEBUG] [TID:129999206724288] Extracted message from FD=24: sign_up|xiluo|123456
+[2026-02-01 23:24:16] [DEBUG] [TID:129999206724288] Incomplete message in buffer, FD=24, pos=0
+[2026-02-01 23:24:17] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:24:27] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:24:37] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:24:47] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:24:56] [DEBUG] [TID:129999206724288] Extracted message from FD=24: sign_up|Alb|123456
+[2026-02-01 23:24:56] [DEBUG] [TID:129999206724288] Incomplete message in buffer, FD=24, pos=0
+[2026-02-01 23:24:56] [INFO ] [TID:129999176722112] Operation - UserID: 1009 | Op: sign_up | Details: username: Alb
+[2026-02-01 23:24:57] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:25:03] [DEBUG] [TID:129999206724288] Extracted message from FD=24: sign_in|Alb|123456
+[2026-02-01 23:25:03] [DEBUG] [TID:129999206724288] Incomplete message in buffer, FD=24, pos=0
+[2026-02-01 23:25:03] [INFO ] [TID:129999168329408] Operation - UserID: 1009 | Op: login | Details: username: Alb
+[2026-02-01 23:25:03] [DEBUG] [TID:129999168329408] select_many_SQL fetched 0 rows
+[2026-02-01 23:25:07] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:25:17] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:25:18] [DEBUG] [TID:129999206724288] Extracted message from FD=24: heartbeat
+[2026-02-01 23:25:18] [DEBUG] [TID:129999206724288] Incomplete message in buffer, FD=24, pos=0
+[2026-02-01 23:25:26] [DEBUG] [TID:129999206724288] Extracted message from FD=24: q
+
+[2026-02-01 23:25:26] [DEBUG] [TID:129999206724288] Incomplete message in buffer, FD=24, pos=0
+[2026-02-01 23:25:26] [INFO ] [TID:129999206724288] Client closed connection: FD=24
+[2026-02-01 23:25:26] [INFO ] [TID:129999206724288] Client disconnected: FD=24
+[2026-02-01 23:25:26] [INFO ] [TID:129999206724288] Client disconnected: FD=24
+[2026-02-01 23:25:26] [ERROR] [TID:129999206724288] [ERR:[UNKNOWN] (4003) 未定义的错误码: 4003] Failed to send response to fd=24
+[2026-02-01 23:25:26] [INFO ] [TID:129999206724288] Client disconnected: FD=24
+[2026-02-01 23:25:27] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:25:37] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:25:47] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:25:57] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:26:07] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:26:17] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:26:27] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:26:37] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:26:47] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:26:57] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:27:07] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:27:17] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:27:27] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:27:37] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:27:47] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:27:57] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:28:07] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:28:17] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:28:27] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:28:37] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:28:47] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:28:57] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:29:07] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:29:17] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:29:27] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:29:37] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:29:47] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:29:57] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:30:07] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:30:17] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:30:27] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:30:37] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:30:47] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:30:57] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:31:07] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:31:17] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:31:27] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:31:37] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:31:47] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:31:57] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:32:07] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:32:17] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:32:27] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:32:37] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:32:47] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:32:57] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:33:07] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:33:17] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:33:27] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:33:37] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:33:47] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:33:57] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:34:07] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:34:17] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:34:27] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:34:37] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-01 23:34:47] [DEBUG] [TID:129999050831552] select_many_SQL fetched 0 rows
+[2026-02-02 00:18:12] [INFO ] [TID:124334163661952] Logger initialized successfully
+[2026-02-02 00:18:12] [INFO ] [TID:124334163661952] ========Chatroom Server Statring========
+[2026-02-02 00:18:12] [INFO ] [TID:124334163661952] Server socket buffers configured: SNDbuf=262144, RCVbuf=262144
+[2026-02-02 00:18:12] [INFO ] [TID:124334163661952] Server starting
+[2026-02-02 00:18:12] [INFO ] [TID:124334163661952] Epoll server started successfully, waiting for connections...
+[2026-02-02 00:18:12] [INFO ] [TID:124334007842496] Database connected successfully: Chatroom
+[2026-02-02 00:18:22] [DEBUG] [TID:124334007842496] select_many_SQL fetched 0 rows
+[2026-02-02 00:18:25] [WARN ] [TID:124334163661952] Failed to set TCP_NODELAY for FD=24
+[2026-02-02 00:18:25] [INFO ] [TID:124334163661952] New client connected: FD=24
+[2026-02-02 00:18:30] [DEBUG] [TID:124334163661952] Extracted message from FD=24: sign_in|Alb|123456
+[2026-02-02 00:18:30] [DEBUG] [TID:124334163661952] Incomplete message in buffer, FD=24, pos=0
+[2026-02-02 00:18:30] [INFO ] [TID:124334142125760] Operation - UserID: 1009 | Op: login | Details: username: Alb
+[2026-02-02 00:18:30] [DEBUG] [TID:124334142125760] select_many_SQL fetched 0 rows
+[2026-02-02 00:18:31] [DEBUG] [TID:124334163661952] Extracted message from FD=24: q
+
+[2026-02-02 00:18:31] [DEBUG] [TID:124334163661952] Incomplete message in buffer, FD=24, pos=0
+[2026-02-02 00:18:31] [INFO ] [TID:124334163661952] Client closed connection: FD=24
+[2026-02-02 00:18:31] [INFO ] [TID:124334163661952] Client disconnected: FD=24
+[2026-02-02 00:18:31] [INFO ] [TID:124334163661952] Client disconnected: FD=24
+[2026-02-02 00:18:31] [ERROR] [TID:124334163661952] [ERR:[UNKNOWN] (4003) 未定义的错误码: 4003] Failed to send response to fd=24
+[2026-02-02 00:18:31] [INFO ] [TID:124334163661952] Client disconnected: FD=24
+[2026-02-02 00:18:32] [DEBUG] [TID:124334007842496] select_many_SQL fetched 0 rows
+[2026-02-02 00:18:42] [DEBUG] [TID:124334007842496] select_many_SQL fetched 0 rows
+[2026-02-02 00:18:52] [DEBUG] [TID:124334007842496] select_many_SQL fetched 0 rows
+[2026-02-02 00:19:02] [DEBUG] [TID:124334007842496] select_many_SQL fetched 0 rows
+[2026-02-02 00:19:12] [DEBUG] [TID:124334007842496] select_many_SQL fetched 0 rows
+[2026-02-02 00:19:22] [DEBUG] [TID:124334007842496] select_many_SQL fetched 0 rows
+[2026-02-02 00:19:32] [DEBUG] [TID:124334007842496] select_many_SQL fetched 0 rows
+[2026-02-02 00:19:44] [INFO ] [TID:136206420477056] Logger initialized successfully
+[2026-02-02 00:19:44] [INFO ] [TID:136206420477056] ========Chatroom Server Statring========
+[2026-02-02 00:19:44] [INFO ] [TID:136206420477056] Server socket buffers configured: SNDbuf=262144, RCVbuf=262144
+[2026-02-02 00:19:44] [INFO ] [TID:136206420477056] Server starting
+[2026-02-02 00:19:44] [INFO ] [TID:136206420477056] Epoll server started successfully, waiting for connections...
+[2026-02-02 00:19:44] [INFO ] [TID:136206264235712] Database connected successfully: Chatroom
+[2026-02-02 00:19:50] [WARN ] [TID:136206420477056] Failed to set TCP_NODELAY for FD=24
+[2026-02-02 00:19:50] [INFO ] [TID:136206420477056] New client connected: FD=24
+[2026-02-02 00:19:54] [DEBUG] [TID:136206264235712] select_many_SQL fetched 0 rows
+[2026-02-02 00:20:04] [DEBUG] [TID:136206264235712] select_many_SQL fetched 0 rows
+[2026-02-02 00:20:14] [DEBUG] [TID:136206264235712] select_many_SQL fetched 0 rows
+[2026-02-02 00:20:24] [DEBUG] [TID:136206264235712] select_many_SQL fetched 0 rows
+[2026-02-02 00:20:34] [DEBUG] [TID:136206264235712] select_many_SQL fetched 0 rows
+[2026-02-02 00:20:44] [DEBUG] [TID:136206264235712] select_many_SQL fetched 0 rows
+[2026-02-02 00:20:54] [DEBUG] [TID:136206264235712] select_many_SQL fetched 0 rows
+[2026-02-02 00:21:04] [DEBUG] [TID:136206264235712] select_many_SQL fetched 0 rows
+[2026-02-02 00:21:14] [DEBUG] [TID:136206264235712] select_many_SQL fetched 0 rows
+[2026-02-02 00:21:23] [DEBUG] [TID:136206420477056] Extracted message from FD=24: q
+
+[2026-02-02 00:21:23] [DEBUG] [TID:136206420477056] Incomplete message in buffer, FD=24, pos=0
+[2026-02-02 00:21:24] [DEBUG] [TID:136206264235712] select_many_SQL fetched 0 rows
+[2026-02-02 00:21:25] [INFO ] [TID:136206420477056] Client closed connection: FD=24
+[2026-02-02 00:21:25] [INFO ] [TID:136206420477056] Client disconnected: FD=24
+[2026-02-02 00:21:25] [INFO ] [TID:136206420477056] Client disconnected: FD=24
+[2026-02-02 00:21:34] [DEBUG] [TID:136206264235712] select_many_SQL fetched 0 rows
+[2026-02-02 00:21:44] [DEBUG] [TID:136206264235712] select_many_SQL fetched 0 rows
+[2026-02-02 00:21:54] [DEBUG] [TID:136206264235712] select_many_SQL fetched 0 rows
+[2026-02-02 00:22:04] [DEBUG] [TID:136206264235712] select_many_SQL fetched 0 rows

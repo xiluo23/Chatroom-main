@@ -1,0 +1,1 @@
+/usr/bin/c++ -g -rdynamic CMakeFiles/client.dir/epoll_client.cpp.o -o /mnt/hgfs/linux/Chatroom-main/bin/client   -L/usr/lib64/mysql  -Wl,-rpath,/usr/lib64/mysql -lpthread 
