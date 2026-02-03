@@ -7,7 +7,8 @@ string MyDb::get_name(int user_id){
     }
     string sql="select user_name from user where user_id="+to_string(user_id);
     if(mysql_query(mysql,sql.c_str())){
-        LOG_DB_ERROR(sql,"get_name query failed",ERR_DB_QUERY_FAIL);
+        string err_msg = "get_name query failed: " + string(mysql_error(mysql));
+        LOG_DB_ERROR(sql,err_msg,ERR_DB_QUERY_FAIL);
         return "";
     }
     MYSQL_RES* result=mysql_store_result(mysql);  // 使用局部变量
@@ -32,7 +33,8 @@ int MyDb::get_id(const char* name){
     }
     string sql="select user_id from user where user_name='"+string(name)+"'";
     if(mysql_query(mysql,sql.c_str())){
-        LOG_DB_ERROR(sql,"get_id query failed for username: "+string(name),ERR_DB_QUERY_FAIL);
+        string err_msg = "get_id query failed for username: " + string(name) + ". Error: " + string(mysql_error(mysql));
+        LOG_DB_ERROR(sql,err_msg,ERR_DB_QUERY_FAIL);
         return -1;
     }
     MYSQL_RES* result=mysql_store_result(mysql);  // 使用局部变量
@@ -63,9 +65,11 @@ MyDb::~MyDb(){
 }
 
 bool MyDb::initDB(string host,string user,string pwd,string db_name,int port=3306){
-    mysql=mysql_real_connect(mysql,host.c_str(),user.c_str(),pwd.c_str(),db_name.c_str(),port,NULL,0);
-    if(!mysql){
-        LOG_ERROR("Failed to connect to database: "+string(db_name)+" on "+host,ERR_DB_CONNECTION_FAIL);
+    mysql=mysql_init(NULL); // Re-init if needed, but constructor already did it.
+    // Ensure mysql is valid (constructor does it)
+
+    if(!mysql_real_connect(mysql,host.c_str(),user.c_str(),pwd.c_str(),db_name.c_str(),port,NULL,0)){
+        LOG_ERROR("Failed to connect to database: "+string(db_name)+" on "+host + ". Error: " + mysql_error(mysql), ERR_DB_CONNECTION_FAIL);
         return false;
     }
     LOG_INFO("Database connected successfully: "+string(db_name));
@@ -74,7 +78,8 @@ bool MyDb::initDB(string host,string user,string pwd,string db_name,int port=330
 
 bool MyDb::exeSQL(string sql){
     if(mysql_query(mysql,sql.c_str())){
-        LOG_DB_ERROR(sql,"SQL query failed",ERR_DB_QUERY_FAIL);
+        string err_msg = "SQL query failed: " + string(mysql_error(mysql));
+        LOG_DB_ERROR(sql,err_msg,ERR_DB_QUERY_FAIL);
         return false;
     }
     MYSQL_RES* result=mysql_store_result(mysql);  // 使用局部变量
@@ -100,13 +105,15 @@ long long MyDb::get_last_insert_id(){
 
 bool MyDb::select_one_SQL(string sql, string& str) {
     if (mysql_query(mysql, sql.c_str())) {
-        LOG_DB_ERROR(sql,"select_one_SQL query failed",ERR_DB_QUERY_FAIL);
+        string err_msg = "select_one_SQL query failed: " + string(mysql_error(mysql));
+        LOG_DB_ERROR(sql,err_msg,ERR_DB_QUERY_FAIL);
         return false;
     }
 
     MYSQL_RES* result = mysql_store_result(mysql);  // 使用局部变量
     if (!result) {
-        LOG_DB_ERROR(sql,"Failed to fetch result",ERR_DB_QUERY_FAIL);
+        string err_msg = "Failed to fetch result: " + string(mysql_error(mysql));
+        LOG_DB_ERROR(sql,err_msg,ERR_DB_QUERY_FAIL);
         return false;
     }
     MYSQL_ROW row=mysql_fetch_row(result);  // 使用局部变量
@@ -132,7 +139,8 @@ bool MyDb::select_one_SQL(string sql, string& str) {
 
 bool MyDb::select_many_SQL(string sql,string &str){
     if(mysql_query(mysql,sql.c_str())){
-        LOG_DB_ERROR(sql,"select_many_SQL query failed",ERR_DB_QUERY_FAIL);
+        string err_msg = "select_many_SQL query failed: " + string(mysql_error(mysql));
+        LOG_DB_ERROR(sql,err_msg,ERR_DB_QUERY_FAIL);
         return false;
     }
     MYSQL_RES* result=mysql_store_result(mysql);  // 使用局部变量
@@ -156,9 +164,15 @@ bool MyDb::select_many_SQL(string sql,string &str){
             str.pop_back();
     }
     else{
-        LOG_DB_ERROR(sql,"Failed to fetch result",ERR_DB_QUERY_FAIL);
+        string err_msg = "Failed to fetch result: " + string(mysql_error(mysql));
+        LOG_DB_ERROR(sql,err_msg,ERR_DB_QUERY_FAIL);
         return false;
     }
     mysql_free_result(result);
     return true;
+}
+
+bool MyDb::ping() {
+    if (mysql == NULL) return false;
+    return mysql_ping(mysql) == 0;
 }

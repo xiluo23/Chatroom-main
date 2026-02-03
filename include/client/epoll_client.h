@@ -15,7 +15,7 @@
 
 #define IP "127.0.0.1"
 #define PORT 8080
-#define BUF_SIZE 1024
+#define BUF_SIZE 4096
 #define EVENTS_NUM 10
 
 // 客户端接收缓冲区（用于处理粘包/拆包）

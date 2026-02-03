@@ -22,8 +22,8 @@
 #include<map>
 
 #define BUF_SIZE 4096      // 接收缓冲区大小（4KB，对齐协议最大消息）
-#define CLINT_SIZE 1000
-#define MAX_EVENTS 1024
+#define CLINT_SIZE 10000
+#define MAX_EVENTS 4096
 #define PORT 3306
 #define HOST "192.168.147.130"
 #define USER "ftpuser"
@@ -105,6 +105,17 @@ MyDb* ThreadPool::get_conn(){
         cerr << "Error: Retrieved null connection from pool!" << endl;
         return nullptr;
     }
+
+    // Check if connection is alive, reconnect if needed
+    if (!conn->ping()) {
+        // If ping fails, it means reconnect failed or server gone.
+        // We can try to log it. 
+        // Since we cannot easily re-init here (don't have credentials), 
+        // we just return the connection and let the query fail with a proper error message.
+        // OR we can try to re-init if we store credentials in MyDb or ThreadPool.
+        // But for now, ping() attempts reconnect. If it fails, it fails.
+    }
+    
     return conn;
 }
 void ThreadPool::en_conn(MyDb*conn){

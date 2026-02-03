@@ -357,13 +357,13 @@ void multi_chat_resp(char*code,char*msg){
 }
 void broadcast_chat_resp(char*code,char*msg){
     if(strcmp(code,"1")==0){
-        puts("发送成功");
-        cur_state=state_menu;
-    }
-    else if(strcmp(code,"2")==0){
         char*from=strtok(msg,";");
         char*text=strtok(NULL,";");
         printf("收到%s发送的信息:%s\n",from,text);
+    }
+    else if(strcmp(code,"2")==0){
+        puts("发送成功");
+        cur_state=state_menu;
     }
     else{
         puts("请重试");
@@ -371,8 +371,12 @@ void broadcast_chat_resp(char*code,char*msg){
     }
 }
 void handle_server_message(const char*msg){//eg:sign_up|0|注册成功
+    // 使用安全拷贝防止堆栈溢出：历史记录等消息可能远大于 BUF_SIZE
     char tmp[BUF_SIZE];
-    strcpy(tmp,msg);
+    // 只拷贝最多 BUF_SIZE-1 个字节，并手动补 '\0'
+    strncpy(tmp, msg, BUF_SIZE - 1);
+    tmp[BUF_SIZE - 1] = '\0';
+
     char*type=strtok(tmp,"|");
     char*code=strtok(NULL,"|");
     char*text=strtok(NULL,"|");

@@ -5,6 +5,10 @@
 #include <thread>
 #include <functional>
 #include<string>
+#include <mutex>
+#include <queue>
+#include <condition_variable>
+#include <atomic>
 using namespace std;
 
 /*
@@ -35,6 +39,9 @@ public:
     void init_notify_handler(function<void(int, string)> fn);
 
 private:
+    enum class CmdType { SUB, UNSUB };
+    struct Cmd { CmdType type; int channel; };
+
     // hiredis同步上下文对象，负责publish消息
     redisContext *_publish_context;
 
@@ -43,6 +50,15 @@ private:
 
     // 回调操作，收到订阅的消息，给service层上报
     function<void(int, string)> _notify_message_handler;
+    
+    // 订阅/退订命令队列，仅在订阅线程中串行执行，保证 _subcribe_context 线程安全
+    queue<Cmd> _cmd_queue;
+    mutex _cmd_mutex;
+    condition_variable _cmd_cv;
+    atomic<bool> _running{false};
+    
+    void process_pending_commands();
+    
 };
 
 #endif

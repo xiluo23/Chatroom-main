@@ -1,1 +1,0 @@
-/usr/bin/c++ -g -rdynamic CMakeFiles/server.dir/ErrorCode.cpp.o CMakeFiles/server.dir/Logger.cpp.o CMakeFiles/server.dir/MyDb.cpp.o CMakeFiles/server.dir/create_db.cpp.o CMakeFiles/server.dir/epoll_ser.cpp.o CMakeFiles/server.dir/redis.cpp.o -o /mnt/hgfs/linux/Chatroom-main/bin/server   -L/usr/lib64/mysql  -Wl,-rpath,/usr/lib64/mysql -lmysqlclient -lhiredis -lcrypt -lpthread 

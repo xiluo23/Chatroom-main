@@ -4,19 +4,26 @@
 #include"ErrorCode.h"
 #include<functional>
 #include <unordered_set>
+#include<signal.h>
+#include <sys/resource.h>
 #include"redis.h"
 using namespace std;
 unordered_map<string,int>clint_nametofd;
 unordered_map<int,string>clint_fdtoname;
 pthread_mutex_t resp_mutex;
 pthread_mutex_t client_map_mutex; // 在头文件中声明为 extern
-ThreadPool pool(16);  // 增加到16个连接以应对高并发
+pthread_mutex_t crypt_mutex; // 保护 crypt 函数的互斥锁
+ThreadPool pool(32);  // 增加到32个连接以应对高并发
 Redis redis_;
 int ser_fd,epoll_fd;
 int event_fd=eventfd(0,EFD_NONBLOCK);
 queue<Response>resp_queue;
 map<int, ClientBuffer> client_buffers;  // 为每个客户端维护接收缓冲区
 pthread_mutex_t buffer_map_mutex;  // 保护 client_buffers 的互斥锁
+
+// 专用于 close_clint 的全局数据库连接及互斥锁
+MyDb g_close_conn;
+pthread_mutex_t g_close_conn_mutex;
 
 // Parser 线程管理（负责粘包/拆包，reactor 只收数据）
 pthread_mutex_t parser_mutex;                         // 保护 parser_pending_set
@@ -26,6 +33,18 @@ unordered_set<int> parser_pending_set;                // 待解析的客户端�
 // Redis 订阅管理
 pthread_mutex_t redis_mutex;                         // 保护 redis 操作（publish/subscribe/unsubscribe）
 unordered_set<int> redis_subscribed_channels;        // 当前已订阅的用户频道集合
+
+// SIGINT 标志位
+volatile sig_atomic_t stop_server = 0;
+
+// SIGINT 信号处理函数：仅设置标志并唤醒 epoll
+void handle_sigint(int signo){
+    (void)signo;
+    stop_server = 1;
+    // 通过 event_fd 唤醒 epoll_wait，避免长时间阻塞
+    uint64_t one = 1;
+    write(event_fd,&one,sizeof(one));
+}
 // SQL 字符串转义，防止单引号导致的语句错误
 static string escape_sql(const string &s) {
     string res;
@@ -83,7 +102,7 @@ int server_init(int argc,char*argv[]){
         close(ser_fd);
         exit(0);
     }
-    if(listen(ser_fd,100)==-1){
+    if(listen(ser_fd,2048)==-1){
         LOG_ERROR("Socket listen failed",ERR_SOCKET_LISTEN_FAIL);
         close(ser_fd);
         exit(0);
@@ -168,31 +187,41 @@ void close_clint(int epoll_fd,int clint_fd){
     }
     pthread_mutex_unlock(&client_map_mutex);
 
-    if (!username.empty()) {
-        // 标记用户为离线并退订 Redis 频道
-        MyDb con;
-        if(con.initDB(HOST, USER, PWD, DB_NAME, 3306)){
-            int uid = con.get_id(username.c_str());
-            string sql = "update user_status set is_online = 0 where user_id ="+to_string(uid);
-            con.exeSQL(sql);
-            pthread_mutex_lock(&redis_mutex);
-            if (redis_subscribed_channels.count(uid)) {
-                if (redis_.unsubscribe(uid)) {
-                    redis_subscribed_channels.erase(uid);
-                    LOG_INFO("Unsubscribed Redis channel for user_id=" + to_string(uid));
-                } else {
-                    LOG_WARN("Failed to unsubscribe Redis channel for user_id=" + to_string(uid));
-                }
-            }
-            pthread_mutex_unlock(&redis_mutex);
-        }
-    }
-    
     // 清除该客户端的接收缓冲区
     pthread_mutex_lock(&buffer_map_mutex);
     client_buffers.erase(clint_fd);
     pthread_mutex_unlock(&buffer_map_mutex);
-} 
+
+    if (!username.empty()) {
+        // 使用全局数据库连接更新状态，需加锁
+        pthread_mutex_lock(&g_close_conn_mutex);
+        // 检查连接有效性
+        if (!g_close_conn.ping()) {
+            LOG_WARN("Global close connection lost, reconnecting...");
+            // initDB 内部会先 mysql_close
+            g_close_conn.initDB(HOST, USER, PWD, DB_NAME, 3306);
+        }
+        
+        int uid = g_close_conn.get_id(username.c_str());
+        if (uid != -1) {
+            string sql = "update user_status set is_online = 0 where user_id ="+to_string(uid);
+            g_close_conn.exeSQL(sql);
+        }
+        pthread_mutex_unlock(&g_close_conn_mutex);
+
+        // Redis 退订（不需要 DB 锁，但需要 redis 锁）
+        pthread_mutex_lock(&redis_mutex);
+        if (redis_subscribed_channels.count(uid)) {
+            if (redis_.unsubscribe(uid)) {
+                redis_subscribed_channels.erase(uid);
+                LOG_INFO("Unsubscribed Redis channel for user_id=" + to_string(uid));
+            } else {
+                LOG_WARN("Failed to unsubscribe Redis channel for user_id=" + to_string(uid));
+            }
+        }
+        pthread_mutex_unlock(&redis_mutex);
+    }
+}
 void handle_clint_data(int epoll_fd,int clint_fd){
     // 获取或创建客户端缓冲区
     pthread_mutex_lock(&buffer_map_mutex);
@@ -335,6 +364,11 @@ void process_clint_data(Task&task){
     
     MyDb* conn = guard.get();
 
+    // Check if connection is alive, reconnect if needed
+    if (!conn->ping()) {
+        LOG_WARN("Database connection lost in pool, attempting to reconnect...");
+    }
+
     // 处理 Redis 订阅入队的消息
     if(task.type == SUB_MSG){
         // 格式: cmd|code|msgid|payload
@@ -374,7 +408,7 @@ void process_clint_data(Task&task){
         }
         return;
     }
-
+    
     // 以下处理客户端发来的消息（parser 解析后入队）
     char buf[BUF_SIZE];
     size_t len = min(task.message.size(), (size_t)BUF_SIZE - 1);
@@ -401,7 +435,9 @@ void process_clint_data(Task&task){
         if(!res){//无相同的name
             string p = generate_str();
             string salt="$1$"+p+"$";
+            pthread_mutex_lock(&crypt_mutex);
             string new_password = crypt(password, salt.c_str());
+            pthread_mutex_unlock(&crypt_mutex);
             string sql = "insert into user (user_name, password, salt) values ('" + string(username) + "', '" + new_password + "', '" + p + "')";
             res=conn->exeSQL(sql);
             if(res){
@@ -449,14 +485,26 @@ void process_clint_data(Task&task){
             en_resp(msg,clint_fd);
         }
         else{
-            //对查询结果进行解析
+            // 对查询结果进行解析
             char *str=new char[ret.size()+1];
             strcpy(str,ret.c_str());
-            char*db_name=strtok(str,"|");
-            char*db_password=strtok(NULL,"|");
-            char*db_salt=strtok(NULL,"|");
+            char* saveptr_db = NULL;
+            char*db_name=strtok_r(str,"|", &saveptr_db);
+            char*db_password=strtok_r(NULL,"|", &saveptr_db);
+            char*db_salt=strtok_r(NULL,"|", &saveptr_db);
+            // 防御性检查：避免 std::string(nullptr) 导致 basic_string: construction from null
+            if(!db_name || !db_password || !db_salt){
+                LOG_ERROR("Login failed: invalid DB row (null field) for user "+string(username),ERR_DB_QUERY_FAIL);
+                char msg[]="sign_in|0|请重试";
+                en_resp(msg,clint_fd);
+                delete[] str;
+                return;
+            }
             string salt="$1$"+string(db_salt)+"$";
-            if(strcmp(db_password,crypt(password,salt.c_str()))==0){
+            pthread_mutex_lock(&crypt_mutex);
+            string computed_hash = crypt(password, salt.c_str());
+            pthread_mutex_unlock(&crypt_mutex);
+            if(strcmp(db_password, computed_hash.c_str())==0){
                 //更新status表
                 int id=conn->get_id(db_name);
                 // printf("userid:%d\n",id);
@@ -611,8 +659,15 @@ void process_clint_data(Task&task){
         char* names_saveptr = NULL;
         char* to=strtok_r(usernames," ",&names_saveptr);
         while(to){
+            // Filter out self-sending
+            if(strcmp(to, from) == 0){
+                to=strtok_r(NULL," ",&names_saveptr);
+                continue;
+            }
+
             string receiver_id=to_string(conn->get_id(to));
             if(receiver_id=="-1"){//发送给的用户不存在
+                to=strtok_r(NULL," ",&names_saveptr);
                 continue;
             }
             string is_delivered="1";
@@ -621,24 +676,11 @@ void process_clint_data(Task&task){
             bool online = clint_nametofd.count(to);
             int to_fd = online ? clint_nametofd[to] : -1;
             pthread_mutex_unlock(&client_map_mutex);
-            if(!online){//接收用户不在线，发布到 Redis
+            
+            if(!online){//接收用户不在线
                 is_delivered="0";
-                int rid = conn->get_id(to);
-                if (rid != -1) {
-                    char pub_msg[BUF_SIZE];
-                    snprintf(pub_msg, BUF_SIZE-1, "multi_chat|2|%s;%s", from, text);
-                    pthread_mutex_lock(&redis_mutex);
-                    redis_.publish(rid, string(pub_msg));
-                    pthread_mutex_unlock(&redis_mutex);
-                }
             }
-            else{
-                // printf("to:%s\n",to);
-                char msg[BUF_SIZE];
-                snprintf(msg,BUF_SIZE-1,"multi_chat|2|%s;%s",from,text);
-                msg[strlen(msg)]=0;
-                en_resp(msg,to_fd);
-            }
+            
             // 插入该接收者的 chat_log 并获取 msgid
             string esc_text = escape_sql(string(text));
             string insert_sql = "insert into chat_log (sender_id,receiver_id,is_delivered,group_type,content) values("+sender_id+","+receiver_id+","+is_delivered+",'"+group_type+"','"+esc_text+"')";
@@ -679,98 +721,114 @@ void process_clint_data(Task&task){
     }
     else if(strcmp(cmd,"broadcast_chat")==0){
         const char*text=strtok_r(NULL,"|",&saveptr);
-        // 访问映射加锁
+        if(!text){
+            char msg[BUF_SIZE];
+            snprintf(msg,BUF_SIZE-1,"broadcast_chat|0|error");
+            en_resp(msg,clint_fd);
+            return ;
+        }
+        
+        // 获取发送者信息
         pthread_mutex_lock(&client_map_mutex);
         auto it_name = clint_fdtoname.find(clint_fd);
         string from_name = (it_name != clint_fdtoname.end()) ? it_name->second : "";
-        // 为了安全遍历，复制一份当前在线用户列表
-        vector<pair<string,int>> clients_snapshot;
-        clients_snapshot.reserve(clint_nametofd.size());
-        for (auto &it : clint_nametofd) {
-            clients_snapshot.push_back(it);
-        }
         pthread_mutex_unlock(&client_map_mutex);
-        const char*from=from_name.c_str();
-        if(!text){
+        
+        if(from_name.empty()){
             char msg[BUF_SIZE];
-            snprintf(msg,BUF_SIZE-1,"mulit_chat|0|error");
+            snprintf(msg,BUF_SIZE-1,"broadcast_chat|0|未登录");
+            en_resp(msg,clint_fd);
             return ;
         }
-        string sender_id=to_string(conn->get_id(from));
-        // 提前对文本进行 SQL 转义，供后续多处使用
-        string esc_text = escape_sql(string(text));
-        for(auto&it:clients_snapshot){
-            string to=it.first;
-            int to_fd=it.second;
-            if(to==from)continue;
-            string receiver_id=to_string(conn->get_id(to.c_str()));
-            if(receiver_id=="-1"){//发送给的用户不存在
+        
+        string sender_id=to_string(conn->get_id(from_name.c_str()));
+        string group_type="broadcast";
+        
+        // 获取所有在线用户
+        string online_users="";
+        // 优化查询：一次性获取用户名和ID，避免在循环中反复查询数据库
+        string sql="select user.user_name, user.user_id from user join user_status on user.user_id = user_status.user_id where is_online = 1";
+        if(!conn->select_many_SQL(sql, online_users)){
+            char msg[BUF_SIZE];
+            snprintf(msg,BUF_SIZE-1,"broadcast_chat|0|获取在线用户失败");
+            en_resp(msg,clint_fd);
+            return ;
+        }
+        
+        // 处理在线用户列表
+        char* buf = strdup(online_users.c_str());
+        char* saveptr_online = NULL;
+        char* user_name_token = strtok_r(buf, " \n", &saveptr_online);
+        
+        while(user_name_token){
+            // 获取对应的 user_id
+            char* user_id_token = strtok_r(NULL, " \n", &saveptr_online);
+            if(!user_id_token) break;
+
+            string current_user_name = user_name_token;
+            string receiver_id = user_id_token;
+
+            // 过滤掉发送者自己
+            if(current_user_name == from_name){
+                user_name_token = strtok_r(NULL, " \n", &saveptr_online);
                 continue;
             }
-            string is_delivered="1";
-            string group_type="broadcast";
-            // 这里的在线状态以快照为准
-            if(to_fd < 0){//接收用户不在线，不发送
-                is_delivered="0";
+            
+            // 检查用户是否在本地在线
+            pthread_mutex_lock(&client_map_mutex);
+            bool online_local = clint_nametofd.count(current_user_name);
+            int to_fd = online_local ? clint_nametofd[current_user_name] : -1;
+            pthread_mutex_unlock(&client_map_mutex);
+            
+            // 插入聊天记录
+            string esc_text = escape_sql(string(text));
+            string is_delivered = online_local ? "1" : "0";
+            string insert_sql = "insert into chat_log (sender_id,receiver_id,is_delivered,group_type,content) values("+sender_id+","+receiver_id+","+is_delivered+",'"+group_type+"','"+esc_text+"')";
+            
+            if(!conn->exeSQL(insert_sql)){
+                LOG_ERROR("Failed to insert chat log for user: " + current_user_name, ERR_DB_EXECUTE_FAIL);
+                user_name_token = strtok_r(NULL, " \n", &saveptr_online);
+                continue;
             }
-            else{
-                // printf("to:%s\n",to);
+            
+            long long msgid = conn->get_last_insert_id();
+            
+            if(online_local){
+                // 本地在线，直接发送
                 char msg[BUF_SIZE];
-                snprintf(msg,BUF_SIZE-1,"broadcast_chat|2|%s;%s",from,text);
+                snprintf(msg,BUF_SIZE-1,"broadcast_chat|1|%s;%s",from_name.c_str(),text);
                 msg[strlen(msg)]=0;
                 en_resp(msg,to_fd);
+                
+                // 更新消息状态为已投递
+                string update_sql = "update chat_log set is_delivered=1 where id=" + to_string(msgid);
+                conn->exeSQL(update_sql);
             }
-            string insert_sql = "insert into chat_log (sender_id,receiver_id,is_delivered,group_type,content) values("+sender_id+","+receiver_id+","+is_delivered+",'"+group_type+"','"+esc_text+"')";
-            if(!conn->exeSQL(insert_sql)){
-                continue;
+            else{
+                // 远程用户，通过Redis发布消息
+                int rid = atoi(receiver_id.c_str());
+                if (rid != -1) {
+                    char pub_msg[BUF_SIZE];
+                    // pub payload: cmd|code|msgid|from;text
+                    snprintf(pub_msg, BUF_SIZE-1, "broadcast_chat|1|%lld|%s;%s", msgid, from_name.c_str(), text);
+                    pthread_mutex_lock(&redis_mutex);
+                    redis_.publish(rid, string(pub_msg));
+                    pthread_mutex_unlock(&redis_mutex);
+                }
             }
-            long long msgid = conn->get_last_insert_id();
+            
+            user_name_token = strtok_r(NULL, " \n", &saveptr_online);
         }
-        // 发布给其它服务器上的在线用户（如果存在）
-        string sql_online = "select user_id,user_name from user join user_status on user.user_id = user_status.user_id where is_online = 1";
-        string online_ret="";
-        conn->select_many_SQL(sql_online, online_ret);
-        if(!online_ret.empty()){
-            char* ret_buf = strdup(online_ret.c_str());
-            char* line = strtok(ret_buf, "\n");
-            while(line){
-                char* p = strtok(line, " ");
-                char* uname = strtok(NULL, " ");
-                if(!p || !uname){
-                    line = strtok(NULL, "\n");
-                    continue;
-                }
-                int uid = atoi(p);
-                string to = string(uname);
-                if(to==from){
-                    line = strtok(NULL, "\n");
-                    continue;
-                }
-                pthread_mutex_lock(&client_map_mutex);
-                bool online_local = clint_nametofd.count(to);
-                pthread_mutex_unlock(&client_map_mutex);
-                if(!online_local){
-                    // 远端服务器有用户，插入消息并 publish（发布包含 msgid）
-                    // 为了确保每个接收者都对应一条 chat_log，提前插入并取回 id
-                    string insert_sql = "insert into chat_log (sender_id,receiver_id,is_delivered,group_type,content) values("+sender_id+","+to_string(uid)+",0,'broadcast','"+esc_text+"')";
-                    if(conn->exeSQL(insert_sql)){
-                        long long msgid = conn->get_last_insert_id();
-                        char pub_msg[BUF_SIZE];
-                        snprintf(pub_msg, BUF_SIZE-1, "broadcast_chat|2|%lld|%s;%s", msgid, from, text);
-                        pthread_mutex_lock(&redis_mutex);
-                        redis_.publish(uid, string(pub_msg));
-                        pthread_mutex_unlock(&redis_mutex);
-                    }
-                }
-                line = strtok(NULL, "\n");
-            }
-            free(ret_buf);
-        }
-        //更新status
-        string sql="update user_status set last_active = NOW() where user_id = "+sender_id;
-        conn->exeSQL(sql); 
+        
+        free(buf);
+        
+        // 更新发送者状态
+        string sql_update="update user_status set last_active = NOW() where user_id = "+sender_id;
+        conn->exeSQL(sql_update);
+        
+        // 发送成功响应
         char msg_resp[BUF_SIZE];
-        snprintf(msg_resp,BUF_SIZE-1,"broadcast_chat|1|发送成功");
+        snprintf(msg_resp,BUF_SIZE-1,"broadcast_chat|2|发送成功");
         msg_resp[strlen(msg_resp)]=0;
         en_resp(msg_resp,clint_fd);
     }
@@ -887,7 +945,8 @@ void* check_timeout_thread(void* arg) {
         );
         if (ret.empty()) continue;
         char* buf = strdup(ret.c_str());
-        char* user_id = strtok(buf, "\n");
+        char* saveptr_to = NULL;
+        char* user_id = strtok_r(buf, "\n", &saveptr_to);
         while (user_id) {
             int uid = atoi(user_id);
             string update ="update user_status set is_online=0 where user_id="+to_string(uid);
@@ -901,7 +960,7 @@ void* check_timeout_thread(void* arg) {
                 char msg[]="bye\n";
                 en_resp(msg,to_fd);
             }
-            user_id = strtok(NULL, "\n");
+            user_id = strtok_r(NULL, "\n", &saveptr_to);
         }
         free(buf);
     }
@@ -917,17 +976,38 @@ void handleRedisSubscribeMessage(int channel, const string& message)
     task.message = message; // 包含 message_id 的完整 payload
     pool.addTask(task);
 }
+
 int main(int argc,char*argv[]){
+    ErrorCodeManager* errorcodemanager=ErrorCodeManager::getInstance();
     Logger*logger=Logger::getInstance();
     if(!logger->initialize("../logs","chatroom.log",LogLevel::DEBUG,true)){
         cerr<<"Failed to initialize logger"<<endl;
         return 1;
     }
     LOG_INFO("========Chatroom Server Statring========");
+    // 安装 SIGINT 处理函数，用于优雅关闭服务器
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = handle_sigint;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    if (sigaction(SIGINT, &sa, NULL) == -1) {
+        perror("sigaction");
+    }
+
     pthread_mutex_init(&resp_mutex,NULL);
     pthread_mutex_init(&client_map_mutex,NULL);
     pthread_mutex_init(&buffer_map_mutex,NULL);  // 初始化缓冲区互斥锁
     pthread_mutex_init(&redis_mutex,NULL);  // 初始化 redis 操作互斥锁
+    pthread_mutex_init(&crypt_mutex,NULL);  // 初始化 crypt 互斥锁
+    pthread_mutex_init(&g_close_conn_mutex, NULL); // 初始化 close_clint 专用连接锁
+    
+    // 初始化 close_clint 专用数据库连接
+    if (!g_close_conn.initDB(HOST, USER, PWD, DB_NAME, 3306)) {
+        LOG_FATAL("Failed to initialize global close connection", ERR_DB_CONNECTION_FAIL);
+        return 1;
+    }
+
     srand(time(NULL));
     if (redis_.connect())
     {
@@ -982,6 +1062,15 @@ int main(int argc,char*argv[]){
     while(1){
         int num_fd=epoll_wait(epoll_fd,events,MAX_EVENTS,-1);
         if(num_fd==-1){
+            if(errno == EINTR){
+                // 被信号中断，如果是 SIGINT 触发的，则准备优雅退出
+                if(stop_server){
+                    LOG_INFO("SIGINT received, preparing to shutdown server gracefully...");
+                    break;
+                }
+                // 其他信号中断则继续等待
+                continue;
+            }
             LOG_ERROR("Epoll wait failed",ERR_EPOLL_WAIT_FAIL);
             break;
         }
@@ -1004,6 +1093,19 @@ int main(int argc,char*argv[]){
             }
         }
     }
+    // 优雅关闭：断开所有当前服务器连接的客户端（使用 clint_fdtoname 作为当前连接集合）
+    pthread_mutex_lock(&client_map_mutex);
+    vector<int> fds_to_close;
+    fds_to_close.reserve(clint_fdtoname.size());
+    for (const auto &p : clint_fdtoname) {
+        fds_to_close.push_back(p.first);  // map<int, string> 的 key 就是 fd
+    }
+    pthread_mutex_unlock(&client_map_mutex);
+
+    for(int fd : fds_to_close){
+        close_clint(epoll_fd, fd);
+    }
+
     close(ser_fd);
     close(epoll_fd);
     Logger::destroy();
