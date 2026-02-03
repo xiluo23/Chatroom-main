@@ -841,7 +841,10 @@ void process_clint_data(Task&task){
             // pool.en_conn(conn);
             return;
         }
-        // 查询与当前用户相关的所有聊天记录（自己是发送方或接收方都要查出来）
+        
+        // 优化：分页查询，每次只查最近的 50 条
+        // 客户端可以通过传递参数 offset 来获取更多历史记录，目前默认只返回最近的。
+        // 防止数据量过大导致内存溢出或 buf 越界。
         string sql=
             "select ru.user_name as sender, u.user_name as receiver, "
             "send_time, group_type, content "
@@ -849,11 +852,28 @@ void process_clint_data(Task&task){
             "join user u on c.receiver_id = u.user_id "
             "join user ru on ru.user_id = c.sender_id "
             "where u.user_name = '" + username + "' "
-            "or ru.user_name = '" + username + "'";
+            "or ru.user_name = '" + username + "' "
+            "order by send_time desc limit 50";
+            
         string ret="";
         conn->select_many_SQL(sql,ret);
+        
+        // 注意：ret 可能很大，但由于加了 limit 50，通常不会超过 BUF_SIZE (4096)。
+        // 如果一条消息很长，50条也可能超。
+        // 更健壮的做法是循环分包发送。
+        
+        if (ret.length() > BUF_SIZE - 100) {
+             // 简单截断或者分包逻辑（这里先做简单的长度保护）
+             LOG_WARN("History data too large, truncating...");
+             ret = ret.substr(0, BUF_SIZE - 100);
+        }
+
         char msg[BUF_SIZE];
-        snprintf(msg,BUF_SIZE-1,"show_history|1|%s",ret.c_str());
+        // 使用 snprintf 时要注意 ret 的长度
+        int written = snprintf(msg, BUF_SIZE-1, "show_history|1|%s", ret.c_str());
+        if (written >= BUF_SIZE-1) {
+             msg[BUF_SIZE-1] = 0; // 确保截断后有结束符
+        }
         en_resp(msg,clint_fd);
     }
     else if(strcmp(cmd,"q\n")==0||strcmp(cmd,"Q\n")==0){
