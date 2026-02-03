@@ -1,3 +1,3 @@
 # Chatroom-main
-build cmake ..
+在build目录中 cmake ..
 make
