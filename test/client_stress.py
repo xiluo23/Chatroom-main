@@ -4,6 +4,10 @@ import struct
 import time
 import random
 import string
+try:
+    import resource
+except ImportError:
+    resource = None
 
 
 def encode_message(payload: str) -> bytes:
@@ -19,7 +23,7 @@ async def send_and_maybe_recv(reader: asyncio.StreamReader,
                               writer: asyncio.StreamWriter,
                               payload: str,
                               need_resp: bool = False,
-                              timeout: float = 5.0,
+                              timeout: float = 15.0,
                               expected_cmd: str | None = None) -> str | None:
     """
     发送一条协议消息，可选等待一条响应。
@@ -83,7 +87,7 @@ async def create_user_and_login(host: str,
     - 登录 sign_in
     - 循环发送 heartbeat 维持在线
     """
-    username = f"stress_new9_{user_index}"
+    username = f"stress_new16_{user_index}"
     password = "123456"
 
     try:
@@ -111,6 +115,8 @@ async def create_user_and_login(host: str,
             )
             # 允许"用户名重复"，因此这里只在严重错误时计为失败
             if resp is None or resp.startswith("sign_up|0|") and "用户名重复" not in resp:
+                if results["signup_fail"] < 5: # 只打印前几个错误
+                    print(f"[{user_index}] signup fail: resp={resp}")
                 results["signup_fail"] += 1
                 await close()
                 return
@@ -123,6 +129,8 @@ async def create_user_and_login(host: str,
             expected_cmd="sign_in"
         )
         if resp is None or not resp.startswith("sign_in|1|"):
+            if results["login_fail"] < 5:
+                print(f"[{user_index}] login fail: resp={resp}")
             results["login_fail"] += 1
             await close()
             return
@@ -139,6 +147,18 @@ async def create_user_and_login(host: str,
                 chat_payload,
                 need_resp=True,
                 expected_cmd="single_chat"
+            )
+
+        # 广播消息测试 (仅 user_index=0 发送，避免风暴)
+        if user_index == 0:
+            broadcast_msg = f"broadcast_from_{username}"
+            broadcast_payload = f"broadcast_chat|{broadcast_msg}"
+            # 期待收到确认 "broadcast_chat|1|..."
+            await send_and_maybe_recv(
+                reader, writer,
+                broadcast_payload,
+                need_resp=True,
+                expected_cmd="broadcast_chat"
             )
 
         # 启动心跳循环，维持“在线通信”状态
@@ -236,7 +256,7 @@ def main():
     parser.add_argument("host", help="服务器 IP")
     parser.add_argument("port", type=int, help="服务器端口")
     parser.add_argument(
-        "--clients", type=int, default=1000, help="目标并发在线客户端数量"
+        "--clients", type=int, default=5000, help="目标并发在线客户端数量"
     )
     parser.add_argument(
         "--heartbeat-interval",
@@ -255,6 +275,25 @@ def main():
 
     args = parser.parse_args()
     need_signup = not args.no_signup
+
+    # Check ulimit
+    if resource:
+        try:
+            soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+            print(f"Current RLIMIT_NOFILE: soft={soft}, hard={hard}")
+            if soft < 65535:
+                target = hard
+                if target == resource.RLIM_INFINITY:
+                    target = 65535
+                try:
+                    resource.setrlimit(resource.RLIMIT_NOFILE, (target, hard))
+                    print(f"Increased RLIMIT_NOFILE to {target}")
+                except Exception as e:
+                    print(f"Failed to increase RLIMIT_NOFILE: {e}")
+        except Exception as e:
+            print(f"Error checking rlimit: {e}")
+    else:
+        print("resource module not available (Windows?), skipping ulimit check.")
 
     asyncio.run(
         stress_test(

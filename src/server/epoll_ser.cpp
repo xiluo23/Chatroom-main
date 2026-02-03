@@ -985,6 +985,28 @@ int main(int argc,char*argv[]){
         return 1;
     }
     LOG_INFO("========Chatroom Server Statring========");
+
+    // 检查并尝试提升文件描述符限制
+    struct rlimit rl;
+    if (getrlimit(RLIMIT_NOFILE, &rl) == 0) {
+        LOG_INFO("Current RLIMIT_NOFILE: soft=" + to_string(rl.rlim_cur) + ", hard=" + to_string(rl.rlim_max));
+        if (rl.rlim_cur < 65535) {
+            // 尝试提升软限制到硬限制的最大值（或 65535）
+            rlim_t target = (rl.rlim_max == RLIM_INFINITY) ? 65535 : rl.rlim_max;
+            if (target > 65535) target = 65535; // 避免设置过大
+            if (target > rl.rlim_cur) {
+                rl.rlim_cur = target;
+                if (setrlimit(RLIMIT_NOFILE, &rl) == 0) {
+                    LOG_INFO("Successfully increased RLIMIT_NOFILE to " + to_string(rl.rlim_cur));
+                } else {
+                    LOG_WARN("Failed to increase RLIMIT_NOFILE: " + string(strerror(errno)));
+                }
+            }
+        }
+    } else {
+        LOG_ERROR("Failed to get RLIMIT_NOFILE", ERR_UNKNOWN);
+    }
+
     // 安装 SIGINT 处理函数，用于优雅关闭服务器
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
