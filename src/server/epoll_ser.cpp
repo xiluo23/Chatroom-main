@@ -102,14 +102,14 @@ int server_init(int argc,char*argv[]){
         close(ser_fd);
         exit(0);
     }
-    if(listen(ser_fd,2048)==-1){
+    if(listen(ser_fd,5000)==-1){
         LOG_ERROR("Socket listen failed",ERR_SOCKET_LISTEN_FAIL);
         close(ser_fd);
         exit(0);
     }
     // 优化套接字缓冲区大小，支持高并发
-    int sndbuf = 256 * 1024;  // 发送缓冲区256KB
-    int rcvbuf = 256 * 1024;  // 接收缓冲区256KB
+    int sndbuf = 128 * 1024;  // 发送缓冲区32KB
+    int rcvbuf = 128 * 1024;  // 接收缓冲区32KB
     if(setsockopt(ser_fd, SOL_SOCKET, SO_SNDBUF, &sndbuf, sizeof(sndbuf)) == -1){
         LOG_WARN("Failed to set SO_SNDBUF");
     }

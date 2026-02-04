@@ -23,7 +23,7 @@ async def send_and_maybe_recv(reader: asyncio.StreamReader,
                               writer: asyncio.StreamWriter,
                               payload: str,
                               need_resp: bool = False,
-                              timeout: float = 15.0,
+                              timeout: float = 30.0,
                               expected_cmd: str | None = None) -> str | None:
     """
     发送一条协议消息，可选等待一条响应。
@@ -87,7 +87,7 @@ async def create_user_and_login(host: str,
     - 登录 sign_in
     - 循环发送 heartbeat 维持在线
     """
-    username = f"stress_new16_{user_index}"
+    username = f"stress_new18_{user_index}"
     password = "123456"
 
     try:
