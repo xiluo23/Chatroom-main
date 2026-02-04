@@ -1,0 +1,47 @@
+0 verbose cli C:\Program Files\nodejs\node.exe C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js
+1 info using npm@10.9.3
+2 info using node@v22.19.0
+3 silly config load:file:C:\Program Files\nodejs\node_modules\npm\npmrc
+4 silly config load:file:D:\linux\Chatroom-main\web_proxy\.npmrc
+5 silly config load:file:C:\Users\xiluo\.npmrc
+6 silly config load:file:C:\Users\xiluo\npm-global\etc\npmrc
+7 verbose title npm install
+8 verbose argv "install"
+9 verbose logfile logs-max:10 dir:D:\linux\Chatroom-main\web_proxy\.npm-cache\_logs\2026-02-04T09_49_27_435Z-
+10 verbose logfile D:\linux\Chatroom-main\web_proxy\.npm-cache\_logs\2026-02-04T09_49_27_435Z-debug-0.log
+11 silly logfile done cleaning log files
+12 silly packumentCache heap:4345298944 maxSize:1086324736 maxEntrySize:543162368
+13 silly idealTree buildDeps
+14 silly fetch manifest ws@^8.14.0
+15 silly packumentCache full:https://registry.npmjs.org/ws cache-miss
+16 http fetch GET 200 https://registry.npmjs.org/ws 1070ms (cache miss)
+17 silly packumentCache full:https://registry.npmjs.org/ws set size:undefined disposed:false
+18 silly fetch manifest bufferutil@^4.0.1
+19 silly packumentCache full:https://registry.npmjs.org/bufferutil cache-miss
+20 http fetch GET 200 https://registry.npmjs.org/npm 1344ms
+21 http fetch GET 200 https://registry.npmjs.org/bufferutil 232ms (cache miss)
+22 silly packumentCache full:https://registry.npmjs.org/bufferutil set size:undefined disposed:false
+23 silly fetch manifest utf-8-validate@>=5.0.2
+24 silly packumentCache full:https://registry.npmjs.org/utf-8-validate cache-miss
+25 http fetch GET 200 https://registry.npmjs.org/utf-8-validate 241ms (cache miss)
+26 silly packumentCache full:https://registry.npmjs.org/utf-8-validate set size:undefined disposed:false
+27 silly placeDep ROOT ws@8.19.0 OK for: chat-web-proxy@1.0.0 want: ^8.14.0
+28 silly reify moves {}
+29 silly audit bulk request { ws: [ '8.19.0' ] }
+30 http cache ws@https://registry.npmjs.org/ws/-/ws-8.19.0.tgz 0ms (cache hit)
+31 silly tarball no local data for ws@https://registry.npmjs.org/ws/-/ws-8.19.0.tgz. Extracting by manifest.
+32 http fetch POST 200 https://registry.npmjs.org/-/npm/v1/security/advisories/bulk 233ms
+33 silly audit report {}
+34 http fetch GET 200 https://registry.npmjs.org/ws/-/ws-8.19.0.tgz 278ms (cache miss)
+35 silly ADD node_modules/ws
+36 verbose cwd D:\linux\Chatroom-main\web_proxy
+37 verbose os Windows_NT 10.0.26100
+38 verbose node v22.19.0
+39 verbose npm  v10.9.3
+40 notice
+40 notice New [31mmajor[39m version of npm available! [31m10.9.3[39m -> [34m11.8.0[39m
+40 notice Changelog: [34mhttps://github.com/npm/cli/releases/tag/v11.8.0[39m
+40 notice To update run: [4mnpm install -g npm@11.8.0[24m
+40 notice  { force: true, [Symbol(proc-log.meta)]: true }
+41 verbose exit 0
+42 info ok
