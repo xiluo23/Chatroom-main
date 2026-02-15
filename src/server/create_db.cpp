@@ -1,7 +1,6 @@
 #include <mysql/mysql.h>
 #include <iostream>
 #include <string>
-#include "chatroom/db/MyDb.h"
 //只执行一次即可
 
 
@@ -15,13 +14,6 @@ void execute_sql(MYSQL *conn, const std::string &sql) {
 
 
 int main() {
-    MyDb conn;
-    conn.initDB("192.168.147.130","ftpuser","926472","Chatroom",3306);
-    // char username[]="axxx";
-    // char new_password[]="123131";
-    // char salt[]="asf13122";
-    // string sql = "insert into user (user_name, password, salt) values ('" + string(username) + "', '" + new_password + "', '" + salt + "')";
-    // conn.exeSQL(sql.c_str());
 
     MYSQL *conn = mysql_init(nullptr);
     if (!conn) {
