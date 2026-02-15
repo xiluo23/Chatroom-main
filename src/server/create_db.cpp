@@ -28,7 +28,7 @@ int main() {
     }
 
 
-    创建数据库
+    //创建数据库
     execute_sql(conn, "CREATE DATABASE IF NOT EXISTS Chatroom;");
     execute_sql(conn, "USE Chatroom;");
 
