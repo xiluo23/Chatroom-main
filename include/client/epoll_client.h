@@ -11,7 +11,7 @@
 #include<unistd.h>
 #include<pthread.h>
 #include<stdlib.h>
-#include"protocol.h"
+#include"Protocol.h"
 
 #define IP "127.0.0.1"
 #define PORT 8080
