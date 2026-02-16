@@ -7,7 +7,7 @@
 #include <unistd.h>
 #include <errno.h>
 using namespace std;
-
+#define REDIS_HOST 127.0.0.1
 Redis::Redis()
     : _publish_context(nullptr), _subcribe_context(nullptr)
 {
@@ -29,7 +29,7 @@ Redis::~Redis()
 bool Redis::connect()
 {
     // 负责publish发布消息的上下文连接
-    _publish_context = redisConnect("127.0.0.1", 6379);
+    _publish_context = redisConnect(REDIS_HOST, 6379);
     if (nullptr == _publish_context)
     {
         cerr << "connect redis failed!" << endl;
@@ -37,7 +37,7 @@ bool Redis::connect()
     }
 
     // 负责subscribe订阅消息的上下文连接
-    _subcribe_context = redisConnect("127.0.0.1", 6379);
+    _subcribe_context = redisConnect(REDIS_HOST, 6379);
     if (nullptr == _subcribe_context)
     {
         cerr << "connect redis failed!" << endl;
