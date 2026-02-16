@@ -2,9 +2,7 @@
 
 set -e 
 
-rm -rf `pwd`/build/*
-
-cd `pwd`/build &&
+mkdir build && cd `pwd`/build &&
     cmake ..&&
     make
 cd ..
