@@ -1,4 +1,5 @@
 #include"epoll_ser.h"
+#include"DbConnectionGuard.h"
 #include"MyDb.h"
 #include"Logger.h"
 #include"ErrorCode.h"
