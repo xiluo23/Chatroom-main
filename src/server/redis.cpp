@@ -7,7 +7,7 @@
 #include <unistd.h>
 #include <errno.h>
 using namespace std;
-#define REDIS_HOST "127.0.0.1"
+
 Redis::Redis()
     : _publish_context(nullptr), _subcribe_context(nullptr)
 {
@@ -29,7 +29,7 @@ Redis::~Redis()
 bool Redis::connect()
 {
     // 负责publish发布消息的上下文连接
-    _publish_context = redisConnect(REDIS_HOST, 6379);
+    _publish_context = redisConnect("127.0.0.1", 6379);
     if (nullptr == _publish_context)
     {
         cerr << "connect redis failed!" << endl;
@@ -37,7 +37,7 @@ bool Redis::connect()
     }
 
     // 负责subscribe订阅消息的上下文连接
-    _subcribe_context = redisConnect(REDIS_HOST, 6379);
+    _subcribe_context = redisConnect("127.0.0.1", 6379);
     if (nullptr == _subcribe_context)
     {
         cerr << "connect redis failed!" << endl;
@@ -140,6 +140,14 @@ void Redis::process_pending_commands()
                 return; // 连接断开，停止处理后续命令
             }
         }
+        
+        // 关键修复：redisAppendCommand 之后必须调用 redisGetReply 来消耗掉 Redis 返回的确认消息
+        // 否则这些消息会堆积在缓冲区，干扰后续业务消息的解析
+        redisReply *confirm_reply = nullptr;
+        if (REDIS_OK == redisGetReply(this->_subcribe_context, (void **)&confirm_reply))
+        {
+            if (confirm_reply) freeReplyObject(confirm_reply);
+        }
     }
 }
 
@@ -156,8 +164,12 @@ void Redis::observer_channel_message()
         int rc = redisGetReply(this->_subcribe_context, (void **)&reply);
         if (rc == REDIS_OK)
         {
+            // 关键修复：在高并发下，如果 redisGetReply 成功但返回的 reply 为空（可能是被其他逻辑消耗或特殊时序）
+            // 直接跳过本次处理，避免对 nullptr 进行 free 或访问
+            if (reply == nullptr) continue;
+
             // 订阅收到的消息是一个带三元素的数组
-            if (reply != nullptr && reply->type == REDIS_REPLY_ARRAY && reply->elements == 3)
+            if (reply->type == REDIS_REPLY_ARRAY && reply->elements == 3)
             {
                 // 只有当消息类型为 "message" 时才处理业务逻辑
                 // "subscribe" 和 "unsubscribe" 消息的 element[2] 是整数，访问 str 会导致 crash
@@ -169,7 +181,7 @@ void Redis::observer_channel_message()
                     _notify_message_handler(atoi(reply->element[1]->str) , reply->element[2]->str);
                 }
             }
-            if (reply) freeReplyObject(reply);
+            freeReplyObject(reply);
             reply = nullptr;
         }
         else
