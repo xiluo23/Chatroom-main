@@ -7,7 +7,7 @@
 #include <unistd.h>
 #include <errno.h>
 using namespace std;
-#define REDIS_HOST 127.0.0.1
+#define REDIS_HOST "127.0.0.1"
 Redis::Redis()
     : _publish_context(nullptr), _subcribe_context(nullptr)
 {
