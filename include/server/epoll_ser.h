@@ -23,7 +23,7 @@
 #define CLINT_SIZE 10000
 #define MAX_EVENTS 4096
 #define PORT 3306
-#define HOST "192.168.147.130"
+#define HOST "127.0.0.1"
 #define USER "ftpuser"
 #define DB_NAME "Chatroom"
 #define PWD "926472"
