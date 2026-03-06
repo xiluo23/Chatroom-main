@@ -14,7 +14,7 @@ unordered_map<int,string>clint_fdtoname;
 pthread_mutex_t resp_mutex;
 pthread_mutex_t client_map_mutex; // 在头文件中声明为 extern
 pthread_mutex_t crypt_mutex; // 保护 crypt 函数的互斥锁
-ThreadPool pool(32);  // 增加到32个连接以应对高并发
+ThreadPool pool(16);  
 Redis redis_;
 int ser_fd,epoll_fd;
 int event_fd=eventfd(0,EFD_NONBLOCK);
@@ -436,9 +436,19 @@ void process_clint_data(Task&task){
         if(!res){//无相同的name
             string p = generate_str();
             string salt="$1$"+p+"$";
-            pthread_mutex_lock(&crypt_mutex);
-            string new_password = crypt(password, salt.c_str());
-            pthread_mutex_unlock(&crypt_mutex);
+            
+            // 使用线程安全的 crypt_r 替代带全局锁的 crypt
+            struct crypt_data data;
+            data.initialized = 0;
+            char* hashed = crypt_r(password, salt.c_str(), &data);
+            string new_password = (hashed != nullptr) ? hashed : "";
+            
+            if (new_password.empty()) {
+                char msg[] = "sign_up|0|系统错误";
+                en_resp(msg, clint_fd);
+                return;
+            }
+
             string sql = "insert into user (user_name, password, salt) values ('" + string(username) + "', '" + new_password + "', '" + p + "')";
             res=conn->exeSQL(sql);
             if(res){
@@ -502,9 +512,20 @@ void process_clint_data(Task&task){
                 return;
             }
             string salt="$1$"+string(db_salt)+"$";
-            pthread_mutex_lock(&crypt_mutex);
-            string computed_hash = crypt(password, salt.c_str());
-            pthread_mutex_unlock(&crypt_mutex);
+            
+            // 使用线程安全的 crypt_r 替代带全局锁的 crypt
+            struct crypt_data data;
+            data.initialized = 0;
+            char* hashed = crypt_r(password, salt.c_str(), &data);
+            string computed_hash = (hashed != nullptr) ? hashed : "";
+            
+            if (computed_hash.empty()) {
+                char msg[] = "sign_in|0|系统错误";
+                en_resp(msg, clint_fd);
+                delete[] str;
+                return;
+            }
+
             if(strcmp(db_password, computed_hash.c_str())==0){
                 //更新status表
                 int id=conn->get_id(db_name);
