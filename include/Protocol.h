@@ -107,6 +107,8 @@ inline bool sendMessage(int fd, const string& message) {
         int n = send(fd, encoded.c_str() + total, encoded.length() - total, 0);
         if (n < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                // 在 2 核环境下，由于资源有限，建议让出 CPU 避免忙等消耗 100% CPU
+                std::this_thread::yield();
                 continue;
             } else {
                 cerr << "Error sending message: " << strerror(errno) << endl;
