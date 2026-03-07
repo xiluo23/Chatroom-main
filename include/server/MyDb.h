@@ -14,6 +14,11 @@ private:
 public:
     MyDb();
     ~MyDb();
+    
+    // Disable copy to prevent double free of MYSQL connection
+    MyDb(const MyDb&) = delete;
+    MyDb& operator=(const MyDb&) = delete;
+
     bool initDB(string host,string user,string pwd,string db_name,int port);
     bool exeSQL(string sql);
     bool select_one_SQL(string sql,string& str);

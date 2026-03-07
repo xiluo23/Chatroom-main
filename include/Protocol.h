@@ -5,186 +5,98 @@
  * 
  * 协议格式:
  * [长度(4字节)][数据(N字节)]
- * 
- * 长度字段: 4个字节的大端序整数，表示后续数据的字节数
- * 数据字段: 实际的消息内容（可以是任何格式）
- * 
- * 例如:
- * 消息 "sign_up|user|pass" (16个字节)
- * 协议格式: 0x00 0x00 0x00 0x10 sign_up|user|pass
  */
 
 #include <cstring>
 #include <cstdint>
 #include <string>
 #include <iostream>
+#include <pthread.h>
+#include <thread>
+#include <arpa/inet.h>
+#include <sys/socket.h>
 
 using namespace std;
 
 // ==================== 协议常量 ====================
 #define PROTOCOL_HEADER_SIZE 4      // 头部大小（4字节长度字段）
-#define PROTOCOL_MAX_MESSAGE_SIZE 4096  // 单条消息最大大小 (4KB)
-#define PROTOCOL_MAX_TOTAL_SIZE (PROTOCOL_HEADER_SIZE + PROTOCOL_MAX_MESSAGE_SIZE)  // 总大小
+#define PROTOCOL_MAX_MESSAGE_SIZE 65536  // 单条消息最大大小 (64KB)
+#define PROTOCOL_MAX_TOTAL_SIZE (PROTOCOL_HEADER_SIZE + PROTOCOL_MAX_MESSAGE_SIZE)  // 单条完整消息最大总大小
+#define PROTOCOL_MAX_RECV_BUFFER_SIZE 262144 // 接收缓冲区总大小 (256KB)，应对粘包与突发流量
 
 // ==================== 协议函数 ====================
 
-/**
- * @brief 将消息按照协议格式编码
- * @param message 要发送的消息（不包括长度前缀）
- * @return 编码后的消息（包括4字节长度前缀）
- * 
- * 例如:
- * input:  "sign_up|user|pass"
- * output: "\0\0\0\x10sign_up|user|pass"
- */
 inline string encodeMessage(const string& message) {
-    // 消息长度（4字节，大端序）
     uint32_t msg_len = htonl(message.length());
-    
-    // 创建编码后的消息
     string encoded;
     encoded.resize(PROTOCOL_HEADER_SIZE + message.length());
-    
-    // 复制长度字段（大端序）
     memcpy(encoded.data(), &msg_len, PROTOCOL_HEADER_SIZE);
-    
-    // 复制数据字段
     memcpy(encoded.data() + PROTOCOL_HEADER_SIZE, message.data(), message.length());
-    // cout<<"编码信息："<<encoded<<endl;
     return encoded;
 }
 
-/**
- * @brief 从接收缓冲区中提取一条完整的消息
- * @param buffer 接收缓冲区
- * @param buffer_len 缓冲区中已有数据的长度
- * @param message 存储提取的消息（不包括长度前缀）
- * @return -1: 数据不完整，需要继续接收; >=0: 消费的字节数
- */
 inline int extractMessage(const char* buffer, size_t buffer_len, string& message) {
-    // 检查是否有完整的头部
     if (buffer_len < PROTOCOL_HEADER_SIZE) {
-        return -1;  // 头部不完整
+        return -1;
     }
-    
-    // 读取消息长度（大端序）
     uint32_t msg_len;
     memcpy(&msg_len, buffer, PROTOCOL_HEADER_SIZE);
     msg_len = ntohl(msg_len);
-    
-    // 验证消息长度的有效性
     if (msg_len == 0 || msg_len > PROTOCOL_MAX_MESSAGE_SIZE) {
-        cerr << "Error: Invalid message length: " << msg_len << endl;
-        return -2;  // 消息长度无效
+        return -2;
     }
-    
-    // 检查是否有完整的消息
     size_t total_needed = PROTOCOL_HEADER_SIZE + msg_len;
     if (buffer_len < total_needed) {
-        return -1;  // 消息不完整，需要继续接收
+        return -1;
     }
-    
-    // 提取消息内容
     message.assign(buffer + PROTOCOL_HEADER_SIZE, msg_len);
-    
-    // 返回消费的字节数
-    return total_needed;
+    return (int)total_needed;
 }
 
-/**
- * @brief 发送编码后的消息
- * @param fd 套接字文件描述符
- * @param message 消息内容（不包括长度前缀）
- * @return 成功返回true，失败返回false
- * 
- * 这个函数会自动编码消息并发送
- */
 inline bool sendMessage(int fd, const string& message) {
     string encoded = encodeMessage(message);
-    
     size_t total = 0;
+    int retry_count = 0;
+    const int max_retries = 5;
+
     while (total < encoded.length()) {
-        int n = send(fd, encoded.c_str() + total, encoded.length() - total, 0);
-        if (n < 0) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        ssize_t n = send(fd, encoded.c_str() + total, encoded.length() - total, 0);
+        if (n > 0) {
+            total += n;
+            retry_count = 0; // 成功写入一些数据，重置重试计数
+        } else if (n == -1) {
+            if (errno == EINTR) {
+                continue;
+            } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                // 内核发送缓冲区满，在高并发 QPS 测试时很常见
+                if (++retry_count > max_retries) {
+                    // 超过重试次数，可能对端接收太慢或连接异常
+                    return false;
+                }
+                // 短暂让出 CPU，等待内核缓冲区可用
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 continue;
             } else {
-                cerr << "Error sending message: " << strerror(errno) << endl;
+                // 其他错误（如 EPIPE, ECONNRESET），连接已断开
                 return false;
             }
+        } else {
+            // n == 0，通常不应该发生，除非连接被关闭
+            return false;
         }
-        total += n;
     }
-    
     return true;
 }
 
-/**
- * @brief 接收一条完整的消息
- * @param fd 套接字文件描述符
- * @param message 存储接收的消息
- * @param buffer 缓冲区（用于保存不完整的数据）
- * @param buffer_pos 缓冲区当前位置
- * @return 1: 接收到完整消息; 0: 连接关闭; -1: 需要继续接收; -2: 错误
- * 
- * 使用例:
- * char buffer[4096];
- * int pos = 0;
- * string msg;
- * 
- * while (true) {
- *     int ret = receiveMessage(fd, msg, buffer, pos);
- *     if (ret == 1) {
- *         // 处理消息
- *     } else if (ret == -1) {
- *         // 继续接收
- *     } else {
- *         // 错误或连接关闭
- *     }
- * }
- */
 inline int receiveMessage(int fd, string& message, char* buffer, int& buffer_pos) {
-    // 尝试从缓冲区提取消息
-    int consumed = extractMessage(buffer, buffer_pos, message);
-    
-    if (consumed > 0) {
-        // 提取成功，移动缓冲区
-        memmove(buffer, buffer + consumed, buffer_pos - consumed);
-        buffer_pos -= consumed;
-        return 1;  // 接收到完整消息
-    }
-    
-    if (consumed == -2) {
-        return -2;  // 消息长度无效
-    }
-    
-    // 需要接收更多数据
-    int n = recv(fd, buffer + buffer_pos, PROTOCOL_MAX_TOTAL_SIZE - buffer_pos, 0);
-    
-    if (n < 0) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            return -1;  // 继续接收
-        } else {
-            cerr << "Error receiving message: " << strerror(errno) << endl;
-            return -2;  // 错误
-        }
-    }
-    
-    if (n == 0) {
-        return 0;  // 连接关闭
-    }
-    
+    int n = recv(fd, buffer + buffer_pos, PROTOCOL_MAX_RECV_BUFFER_SIZE - buffer_pos, 0);
+    if (n <= 0) return n;
     buffer_pos += n;
-    
-    // 再次尝试提取消息
-    consumed = extractMessage(buffer, buffer_pos, message);
-    
+    int consumed = extractMessage(buffer, buffer_pos, message);
     if (consumed > 0) {
-        // 提取成功
         memmove(buffer, buffer + consumed, buffer_pos - consumed);
         buffer_pos -= consumed;
-        return 1;  // 接收到完整消息
+        return 1;
     }
-    
-    return -1;  // 消息不完整，需要继续接收
+    return -1;
 }

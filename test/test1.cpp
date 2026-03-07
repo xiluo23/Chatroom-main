@@ -23,7 +23,7 @@ using namespace std;
 
 // ==================== 协议常量 ====================
 #define PROTOCOL_HEADER_SIZE 4      // 头部大小（4字节长度字段）
-#define PROTOCOL_MAX_MESSAGE_SIZE 4096  // 单条消息最大大小 (4KB)
+#define PROTOCOL_MAX_MESSAGE_SIZE 65536  // 单条消息最大大小 (64KB)
 #define PROTOCOL_MAX_TOTAL_SIZE (PROTOCOL_HEADER_SIZE + PROTOCOL_MAX_MESSAGE_SIZE)  // 总大小
 
 // ==================== 协议函数 ====================

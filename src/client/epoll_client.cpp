@@ -134,7 +134,7 @@ bool recv_message(){
         }
         else{
             // 将新数据追加到缓冲区
-            if(client_recv_buffer.pos + bytes_read <= PROTOCOL_MAX_TOTAL_SIZE){
+            if(client_recv_buffer.pos + bytes_read <= PROTOCOL_MAX_RECV_BUFFER_SIZE){
                 memcpy(client_recv_buffer.buffer + client_recv_buffer.pos, temp_buf, bytes_read);
                 client_recv_buffer.pos += bytes_read;
             }

@@ -87,7 +87,7 @@ async def create_user_and_login(host: str,
     - 登录 sign_in
     - 循环发送 heartbeat 维持在线
     """
-    username = f"stress_new18_{user_index}"
+    username = f"stress_new28_{user_index}"
     password = "123456"
 
     try:

@@ -1,4 +1,5 @@
 #include"epoll_ser.h"
+#include"DbConnectionGuard.h"
 #include"MyDb.h"
 #include"Logger.h"
 #include"ErrorCode.h"
@@ -6,29 +7,30 @@
 #include <unordered_set>
 #include<signal.h>
 #include <sys/resource.h>
+#include <memory>
 #include"redis.h"
+#include"Config.h"
+#include"Dbhandle.h"
+#include"ParserPool.h"
+#include"CpuGuard.h"
 using namespace std;
 unordered_map<string,int>clint_nametofd;
 unordered_map<int,string>clint_fdtoname;
 pthread_mutex_t resp_mutex;
 pthread_mutex_t client_map_mutex; // 在头文件中声明为 extern
 pthread_mutex_t crypt_mutex; // 保护 crypt 函数的互斥锁
-ThreadPool pool(32);  // 增加到32个连接以应对高并发
+ThreadPool pool(16);  
 Redis redis_;
 int ser_fd,epoll_fd;
 int event_fd=eventfd(0,EFD_NONBLOCK);
 queue<Response>resp_queue;
-map<int, ClientBuffer> client_buffers;  // 为每个客户端维护接收缓冲区
+#include<memory>
+unordered_map<int, unique_ptr<ClientBuffer>> client_buffers;  // 为每个客户端维护接收缓冲区，使用 unique_ptr 减少拷贝
 pthread_mutex_t buffer_map_mutex;  // 保护 client_buffers 的互斥锁
 
 // 专用于 close_clint 的全局数据库连接及互斥锁
 MyDb g_close_conn;
 pthread_mutex_t g_close_conn_mutex;
-
-// Parser 线程管理（负责粘包/拆包，reactor 只收数据）
-pthread_mutex_t parser_mutex;                         // 保护 parser_pending_set
-pthread_cond_t parser_cond;
-unordered_set<int> parser_pending_set;                // 待解析的客户端集合（去重）
 
 // Redis 订阅管理
 pthread_mutex_t redis_mutex;                         // 保护 redis 操作（publish/subscribe/unsubscribe）
@@ -76,11 +78,11 @@ string generate_str(){//生成salt，使用MD5
     }
     return str;
 }
-int server_init(int argc,char*argv[]){
-    if(argc!=3){
-        cerr<<"Usage: "<<argv[0]<<" <port> <thread_num>\n";
-        exit(0);
-    }
+int server_init(){
+    Config* conf = Config::getInstance();
+    int port = conf->getInt("server_port", 6000);
+    int backlog = conf->getInt("listen_backlog", 1024);
+
     struct sockaddr_in ser_addr;
     if((ser_fd=socket(PF_INET,SOCK_STREAM,0))==-1){
         LOG_ERROR("Socket creation failed",ERR_SOCKET_CREATE_FAIL);
@@ -89,7 +91,7 @@ int server_init(int argc,char*argv[]){
     memset(&ser_addr,0,sizeof(ser_addr));
     ser_addr.sin_family=AF_INET;
     //127.0.0.1 6000
-    ser_addr.sin_port=htons(atoi(argv[2]));
+    ser_addr.sin_port=htons(port);
     ser_addr.sin_addr.s_addr=htonl(INADDR_ANY);
     int opt=1;
     if(setsockopt(ser_fd,SOL_SOCKET,SO_REUSEADDR,&opt,sizeof(opt))==-1){
@@ -102,7 +104,7 @@ int server_init(int argc,char*argv[]){
         close(ser_fd);
         exit(0);
     }
-    if(listen(ser_fd,5000)==-1){
+    if(listen(ser_fd,backlog)==-1){
         LOG_ERROR("Socket listen failed",ERR_SOCKET_LISTEN_FAIL);
         close(ser_fd);
         exit(0);
@@ -172,20 +174,36 @@ void handle_new_connect(){
     }
 }
 void close_clint(int epoll_fd,int clint_fd){
-    epoll_ctl(epoll_fd,EPOLL_CTL_DEL,clint_fd,NULL);
-    close(clint_fd);
-    LOG_INFO("Client disconnected: FD="+to_string(clint_fd));
-    
-    // 访问全局 map 前加锁，避免多线程竞争
+    // 访问全局 map 前加锁，判断是否已经关闭
     string username="";
+    int uid = -1;
+    bool already_closed = false;
+
     pthread_mutex_lock(&client_map_mutex);
     auto it_name = clint_fdtoname.find(clint_fd);
     if (it_name != clint_fdtoname.end()) {
         username = it_name->second;
         clint_nametofd.erase(it_name->second);
         clint_fdtoname.erase(it_name);
+    } else {
+        // 如果不在映射中，可能已经通过 EPOLLRDHUP 等机制关闭了
+        // 我们还需要检查它是否只是一个未登录的连接
+        // 为了保险，我们通过尝试从 epoll 中删除来判断
+        if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, clint_fd, NULL) == -1 && errno == ENOENT) {
+            already_closed = true;
+        }
     }
     pthread_mutex_unlock(&client_map_mutex);
+
+    if (already_closed) return;
+
+    // 如果还没从 epoll 删除（例如未登录用户断开），则执行删除和关闭
+    epoll_ctl(epoll_fd, EPOLL_CTL_DEL, clint_fd, NULL);
+    close(clint_fd);
+    LOG_INFO("Client disconnected: FD="+to_string(clint_fd));
+    
+    // 从 ParserPool 的待处理队列中移除
+    ParserPool::getInstance()->clearFd(clint_fd);
 
     // 清除该客户端的接收缓冲区
     pthread_mutex_lock(&buffer_map_mutex);
@@ -195,40 +213,40 @@ void close_clint(int epoll_fd,int clint_fd){
     if (!username.empty()) {
         // 使用全局数据库连接更新状态，需加锁
         pthread_mutex_lock(&g_close_conn_mutex);
-        // 检查连接有效性
         if (!g_close_conn.ping()) {
-            LOG_WARN("Global close connection lost, reconnecting...");
-            // initDB 内部会先 mysql_close
-            g_close_conn.initDB(HOST, USER, PWD, DB_NAME, 3306);
+            Config* conf = Config::getInstance();
+            g_close_conn.initDB(conf->getString("mysql_host", "127.0.0.1"), 
+                               conf->getString("mysql_user", "ftpuser"), 
+                               conf->getString("mysql_password", "926472"), 
+                               conf->getString("mysql_dbname", "Chatroom"), 
+                               conf->getInt("mysql_port", 3306));
         }
         
-        int uid = g_close_conn.get_id(username.c_str());
+        uid = g_close_conn.get_id(username.c_str());
         if (uid != -1) {
             string sql = "update user_status set is_online = 0 where user_id ="+to_string(uid);
             g_close_conn.exeSQL(sql);
         }
         pthread_mutex_unlock(&g_close_conn_mutex);
 
-        // Redis 退订（不需要 DB 锁，但需要 redis 锁）
-        pthread_mutex_lock(&redis_mutex);
-        if (redis_subscribed_channels.count(uid)) {
-            if (redis_.unsubscribe(uid)) {
-                redis_subscribed_channels.erase(uid);
-                LOG_INFO("Unsubscribed Redis channel for user_id=" + to_string(uid));
-            } else {
-                LOG_WARN("Failed to unsubscribe Redis channel for user_id=" + to_string(uid));
+        if (uid != -1) {
+            pthread_mutex_lock(&redis_mutex);
+            if (redis_subscribed_channels.count(uid)) {
+                if (redis_.unsubscribe(uid)) {
+                    redis_subscribed_channels.erase(uid);
+                }
             }
+            pthread_mutex_unlock(&redis_mutex);
         }
-        pthread_mutex_unlock(&redis_mutex);
     }
 }
 void handle_clint_data(int epoll_fd,int clint_fd){
     // 获取或创建客户端缓冲区
     pthread_mutex_lock(&buffer_map_mutex);
     if(client_buffers.find(clint_fd) == client_buffers.end()){
-        client_buffers[clint_fd] = ClientBuffer();
+        client_buffers[clint_fd] = make_unique<ClientBuffer>();
     }
-    ClientBuffer& client_buf = client_buffers[clint_fd];
+    ClientBuffer& client_buf = *(client_buffers[clint_fd]);
     pthread_mutex_unlock(&buffer_map_mutex);
     
     // 接收新数据并填充缓冲区
@@ -255,89 +273,26 @@ void handle_clint_data(int epoll_fd,int clint_fd){
         }
         else{
             // 将新数据追加到缓冲区
-            if(client_buf.pos + bytes_read <= PROTOCOL_MAX_TOTAL_SIZE){
+            if(client_buf.pos + bytes_read <= PROTOCOL_MAX_RECV_BUFFER_SIZE){
                 memcpy(client_buf.buffer + client_buf.pos, temp_buf, bytes_read);
                 client_buf.pos += bytes_read;
             }
             else{
-                LOG_NET_ERROR(clint_fd,"Receive buffer overflow",ERR_SOCKET_RECV_FAIL);
+                LOG_NET_ERROR(clint_fd,"Error: Receive buffer overflow (pos=" + to_string(client_buf.pos) + ", read=" + to_string(bytes_read) + ")", ERR_BUFFER_OVERFLOW);
                 close_clint(epoll_fd,clint_fd);
                 return;
             }
         }
     }
     
-    // Reactor 只负责收数据并通知 parser 线程解析（parser 做粘包/拆包）
-    pthread_mutex_lock(&parser_mutex);
-    parser_pending_set.insert(clint_fd);
-    pthread_cond_signal(&parser_cond);
-    pthread_mutex_unlock(&parser_mutex);
-    // 注意：parser 线程将会处理 client_buffers[clint_fd] 中的内容并把完整消息入队到线程池
+    // Reactor 只负责收数据并通知 ParserPool 进行解析（多线程粘包/拆包）
+    ParserPool::getInstance()->addFd(clint_fd);
 }
 void signal_event_fd(){
     uint64_t one=1;
     write(event_fd,&one,sizeof(one));
 }
 
-// Parser thread: 从 client_buffers 中解析出完整消息并把 Task 投入线程池
-void* parser_thread_func(void* arg){
-    while(1){
-        pthread_mutex_lock(&parser_mutex);
-        while(parser_pending_set.empty()){
-            pthread_cond_wait(&parser_cond, &parser_mutex);
-        }
-        // 取一个 fd 出来处理（去重）
-        int fd = *parser_pending_set.begin();
-        parser_pending_set.erase(parser_pending_set.begin());
-        pthread_mutex_unlock(&parser_mutex);
-
-        // 处理该 fd 的缓冲区
-        pthread_mutex_lock(&buffer_map_mutex);
-        auto it = client_buffers.find(fd);
-        if(it == client_buffers.end()){
-            pthread_mutex_unlock(&buffer_map_mutex);
-            continue;
-        }
-        ClientBuffer &buf = it->second;
-        pthread_mutex_unlock(&buffer_map_mutex);
-
-        string message;
-        while(true){
-            int consumed = extractMessage(buf.buffer, buf.pos, message);
-            if(consumed == -1){
-                // 不完整，等待更多数据
-                break;
-            } else if(consumed == -2){
-                // 无效长度，移位
-                pthread_mutex_lock(&buffer_map_mutex);
-                if(buf.pos > 1){
-                    memmove(buf.buffer, buf.buffer + 1, buf.pos - 1);
-                    buf.pos -= 1;
-                } else {
-                    buf.pos = 0;
-                }
-                pthread_mutex_unlock(&buffer_map_mutex);
-                continue;
-            } else if(consumed == 0){
-                break;
-            } else {
-                // 完整消息 -> 入队线程池
-                Task task;
-                task.fd = fd;
-                task.message = message;
-                task.type = CLIENT_MSG;
-                pool.addTask(task);
-
-                // 移除已消费数据
-                pthread_mutex_lock(&buffer_map_mutex);
-                memmove(buf.buffer, buf.buffer + consumed, buf.pos - consumed);
-                buf.pos -= consumed;
-                pthread_mutex_unlock(&buffer_map_mutex);
-            }
-        }
-    }
-    return NULL;
-}
 void en_resp(char msg[],int clint_fd){
     Response resp;
     resp.fd=clint_fd;
@@ -386,27 +341,27 @@ void process_clint_data(Task&task){
             return;
         }
         long long msgid = atoll(msgid_str);
-        // payload 例如: "from;text"
-        // 查找 channel（receiver）是否在本机在线
-        int receiver_id = task.channel;
-        string username = conn->get_name(receiver_id);
-        if(username.empty()) return;
-        pthread_mutex_lock(&client_map_mutex);
-        auto it = clint_nametofd.find(username);
-        int to_fd = (it != clint_nametofd.end()) ? it->second : -1;
-        pthread_mutex_unlock(&client_map_mutex);
-        if(to_fd != -1){
-            // 转发给客户端：保持消息内容不含 msgid（和本机消息一致）
-            // payload 形如 "from;text"，构造 client 消息: cmd|code|from;text
-            char out[BUF_SIZE];
-            snprintf(out, BUF_SIZE-1, "%s|%s|%s", cmd, code, payload);
-            out[strlen(out)] = 0;
-            en_resp(out, to_fd);
-            // 更新 DB：通过 msgid 标记已投递
-            string update = "update chat_log set is_delivered=1 where id=" + to_string(msgid);
-            conn->exeSQL(update);
-        }
-        return;
+            // payload 例如: "from;text"
+            // 查找 channel（receiver）是否在本机在线
+            int receiver_id = task.channel;
+            string username = conn->get_name(receiver_id);
+            if(username.empty()) return;
+            pthread_mutex_lock(&client_map_mutex);
+            auto it = clint_nametofd.find(username);
+            int to_fd = (it != clint_nametofd.end()) ? it->second : -1;
+            pthread_mutex_unlock(&client_map_mutex);
+            if(to_fd != -1){
+                // 转发给客户端：保持消息内容不含 msgid（和本机消息一致）
+                // payload 形如 "from;text"，构造 client 消息: cmd|code|from;text
+                char out[BUF_SIZE];
+                snprintf(out, BUF_SIZE-1, "%s|%s|%s", cmd, code, payload);
+                out[strlen(out)] = 0;
+                en_resp(out, to_fd);
+                // 异步更新 DB：通过 msgid 标记已投递
+                string update = "update chat_log set is_delivered=1 where id=" + to_string(msgid);
+                DbHandle::getInstance()->add_task(update);
+            }
+            return;
     }
     
     // 以下处理客户端发来的消息（parser 解析后入队）
@@ -428,45 +383,50 @@ void process_clint_data(Task&task){
             en_resp(msg,clint_fd);
             return;
         }           
-        string sql="select user_id from user where user_name='"+string(username)+"'";
-        string ret="";
-        bool res=conn->select_one_SQL(sql,ret);
-        // puts("1");
-        if(!res){//无相同的name
-            string p = generate_str();
-            string salt="$1$"+p+"$";
-            pthread_mutex_lock(&crypt_mutex);
-            string new_password = crypt(password, salt.c_str());
-            pthread_mutex_unlock(&crypt_mutex);
-            string sql = "insert into user (user_name, password, salt) values ('" + string(username) + "', '" + new_password + "', '" + p + "')";
-            res=conn->exeSQL(sql);
-            if(res){
-                //查询该用户的user_id
-                int user_id=conn->get_id(username);
-                // printf("user_id:%d\n",user_id);
-                LOG_OPERATION(user_id,"sign_up","username: "+string(username));
-                if(user_id==-1){
-                    char msg[]="sign_up|0|请重试";
-                    en_resp(msg,clint_fd);
-                    return;
-                }
-                sql="insert into user_status (user_id) values ("+to_string(user_id)+")";//新用户信息插入user_status
-                if(!conn->exeSQL(sql)){
-                    char msg[]="sign_up|0|请重试";
-                    en_resp(msg,clint_fd);
-                    return;
-                }
-                char msg[]="sign_up|1|请登录";
-                en_resp(msg,clint_fd);
-            }
-            else{
-                char msg[]="sign_up|0|请重试";
-                en_resp(msg,clint_fd);
-            }
+        
+        // 优化注册流程：直接插入并处理重复键错误，减少一次 SELECT 查询
+        string p = generate_str();
+        string salt="$1$"+p+"$";
+        
+        // 修复：将 crypt_data 移至堆分配，防止 128KB 的结构体在多线程栈上导致溢出
+        unique_ptr<struct crypt_data> data(new struct crypt_data);
+        memset(data.get(), 0, sizeof(struct crypt_data));
+        
+        // 使用 CpuScopedGuard 限制高并发下的哈希计算，防止 2 核环境下 Reactor 被饿死
+        char* hashed;
+        {
+            CpuScopedGuard cpu_guard;
+            hashed = crypt_r(password, salt.c_str(), data.get());
         }
-        else{//name重复
-            char msg[]="sign_up|0|用户名重复";
-            en_resp(msg,clint_fd);
+        string new_password = (hashed != nullptr) ? hashed : "";
+        
+        if (new_password.empty()) {
+            char msg[] = "sign_up|0|系统错误";
+            en_resp(msg, clint_fd);
+            return;
+        }
+
+        // 使用 escape_sql 防止特殊字符导致的 SQL 语法错误
+        string safe_username = escape_sql(string(username));
+        string insert_sql = "insert into user (user_name, password, salt) values ('" + safe_username + "', '" + new_password + "', '" + p + "')";
+        
+        if (conn->exeSQL(insert_sql)) {
+            // 插入成功，获取新用户ID并异步插入状态表
+            long long user_id = conn->get_last_insert_id();
+            if (user_id > 0) {
+                LOG_OPERATION(user_id, "sign_up", "username: " + string(username));
+                string status_sql = "insert into user_status (user_id) values (" + to_string(user_id) + ")";
+                DbHandle::getInstance()->add_task(status_sql);
+                char msg[] = "sign_up|1|请登录";
+                en_resp(msg, clint_fd);
+            } else {
+                char msg[] = "sign_up|0|注册失败，请重试";
+                en_resp(msg, clint_fd);
+            }
+        } else {
+            // 插入失败，大概率是用户名重复
+            char msg[] = "sign_up|0|用户名已存在";
+            en_resp(msg, clint_fd);
         }
     }
     else if(strcmp(cmd,"sign_in")==0){
@@ -477,7 +437,9 @@ void process_clint_data(Task&task){
             en_resp(msg,clint_fd);
             return;
         }           
-        string sql="select user_name,password,salt from user where user_name='"+string(username)+"'";
+        
+        string safe_username = escape_sql(string(username));
+        string sql="select user_name,password,salt from user where user_name='"+safe_username+"'";
         string ret="";
         bool res=conn->select_one_SQL(sql,ret);
         if(!res){
@@ -486,10 +448,10 @@ void process_clint_data(Task&task){
         }
         else{
             // 对查询结果进行解析
-            char *str=new char[ret.size()+1];
-            strcpy(str,ret.c_str());
+            unique_ptr<char[]>str(new char[ret.size()+1]);
+            strcpy(str.get(),ret.c_str());
             char* saveptr_db = NULL;
-            char*db_name=strtok_r(str,"|", &saveptr_db);
+            char*db_name=strtok_r(str.get(),"|", &saveptr_db);
             char*db_password=strtok_r(NULL,"|", &saveptr_db);
             char*db_salt=strtok_r(NULL,"|", &saveptr_db);
             // 防御性检查：避免 std::string(nullptr) 导致 basic_string: construction from null
@@ -497,13 +459,29 @@ void process_clint_data(Task&task){
                 LOG_ERROR("Login failed: invalid DB row (null field) for user "+string(username),ERR_DB_QUERY_FAIL);
                 char msg[]="sign_in|0|请重试";
                 en_resp(msg,clint_fd);
-                delete[] str;
                 return;
             }
             string salt="$1$"+string(db_salt)+"$";
-            pthread_mutex_lock(&crypt_mutex);
-            string computed_hash = crypt(password, salt.c_str());
-            pthread_mutex_unlock(&crypt_mutex);
+            
+            // 使用线程安全的 crypt_r 替代带全局锁的 crypt
+            // 修复：将 crypt_data 移至堆分配，防止 128KB 的结构体在多线程栈上导致溢出
+            unique_ptr<struct crypt_data> data(new struct crypt_data);
+            memset(data.get(), 0, sizeof(struct crypt_data));
+            
+            // 使用 CpuScopedGuard 限制高并发下的哈希计算，防止 2 核环境下 Reactor 被饿死
+            char* hashed;
+            {
+                CpuScopedGuard cpu_guard;
+                hashed = crypt_r(password, salt.c_str(), data.get());
+            }
+            string computed_hash = (hashed != nullptr) ? hashed : "";
+            
+            if (computed_hash.empty()) {
+                char msg[] = "sign_in|0|系统错误";
+                en_resp(msg, clint_fd);
+                return;
+            }
+
             if(strcmp(db_password, computed_hash.c_str())==0){
                 //更新status表
                 int id=conn->get_id(db_name);
@@ -557,7 +535,6 @@ void process_clint_data(Task&task){
                 char msg[]="sign_in|0|密码错误";
                 en_resp(msg,clint_fd);
             }
-            delete[]str;
         }
     }
     else if(strcmp(cmd,"show_online_user")==0){
@@ -615,8 +592,9 @@ void process_clint_data(Task&task){
             snprintf(msg,BUF_SIZE-1,"single_chat|1|%s;%s",from,text);
             msg[strlen(msg)]=0;
             en_resp(msg,to_fd);
+            // 异步更新消息状态为已投递
             string update_sql = "update chat_log set is_delivered=1 where id=" + to_string(msgid);
-            conn->exeSQL(update_sql);
+            DbHandle::getInstance()->add_task(update_sql);
         }
         else{
             // 不在本机，发布到 Redis 的接收者频道，消息格式增加 msgid
@@ -635,9 +613,9 @@ void process_clint_data(Task&task){
         snprintf(msg_resp,BUF_SIZE-1,"single_chat|2|发送成功");
         msg_resp[strlen(msg_resp)]=0;
         en_resp(msg_resp, clint_fd);
-        //更新status
-        string sql="update user_status set last_active = NOW() where user_id = "+sender_id;
-        conn->exeSQL(sql);        
+        // 异步更新发送者状态
+        string sql_status ="update user_status set last_active = NOW() where user_id = "+sender_id;
+        DbHandle::getInstance()->add_task(sql_status);
     }
     else if(strcmp(cmd,"multi_chat")==0){
         char*usernames=strtok_r(NULL,"|",&saveptr);
@@ -651,7 +629,8 @@ void process_clint_data(Task&task){
         // printf("usernames:%s,text:%s\n",usernames,text);
         if(!text||!usernames){
             char msg[BUF_SIZE];
-            snprintf(msg,BUF_SIZE-1,"mulit_chat|0|error");
+            snprintf(msg,BUF_SIZE-1,"multi_chat|0|error");
+            en_resp(msg, clint_fd);
             return ;
         }
         string sender_id=to_string(conn->get_id(from));
@@ -706,14 +685,15 @@ void process_clint_data(Task&task){
                 snprintf(msg,BUF_SIZE-1,"multi_chat|2|%s;%s",from,text);
                 msg[strlen(msg)]=0;
                 en_resp(msg,to_fd);
+                // 异步更新消息状态为已投递
                 string update_sql = "update chat_log set is_delivered=1 where id=" + to_string(msgid);
-                conn->exeSQL(update_sql);
+                DbHandle::getInstance()->add_task(update_sql);
             }
             to=strtok_r(NULL," ",&names_saveptr);
         }
-        //更新status
-        string sql="update user_status set last_active = NOW() where user_id = "+sender_id;
-        conn->exeSQL(sql); 
+        //异步更新status
+        string sql_status ="update user_status set last_active = NOW() where user_id = "+sender_id;
+        DbHandle::getInstance()->add_task(sql_status);
         char msg_resp[BUF_SIZE];
         snprintf(msg_resp,BUF_SIZE-1,"multi_chat|1|发送成功");
         msg_resp[strlen(msg_resp)]=0;
@@ -800,9 +780,9 @@ void process_clint_data(Task&task){
                 msg[strlen(msg)]=0;
                 en_resp(msg,to_fd);
                 
-                // 更新消息状态为已投递
+                // 异步更新消息状态为已投递
                 string update_sql = "update chat_log set is_delivered=1 where id=" + to_string(msgid);
-                conn->exeSQL(update_sql);
+                DbHandle::getInstance()->add_task(update_sql);
             }
             else{
                 // 远程用户，通过Redis发布消息
@@ -822,9 +802,9 @@ void process_clint_data(Task&task){
         
         free(buf);
         
-        // 更新发送者状态
+        // 异步更新发送者状态
         string sql_update="update user_status set last_active = NOW() where user_id = "+sender_id;
-        conn->exeSQL(sql_update);
+        DbHandle::getInstance()->add_task(sql_update);
         
         // 发送成功响应
         char msg_resp[BUF_SIZE];
@@ -889,7 +869,7 @@ void process_clint_data(Task&task){
         int id=conn->get_id(username.c_str());
         // printf("user_id:%d\n",id);
         string sql="update user_status set is_online = 0 where user_id ="+to_string(id);
-        conn->exeSQL(sql);
+        DbHandle::getInstance()->add_task(sql);
         // 退订该用户的 Redis 频道
         pthread_mutex_lock(&redis_mutex);
         if (redis_subscribed_channels.count(id)) {
@@ -917,14 +897,9 @@ void process_clint_data(Task&task){
         }
         int user_id=conn->get_id(username.c_str());
         string sql="update user_status set last_active = NOW() where user_id ="+to_string(user_id);
-        if(conn->exeSQL(sql)){
-            char msg[]="heartbeat|1|ok";
-            en_resp(msg,clint_fd);
-        }
-        else{
-            char msg[]="heartbeat|0|更新失败";
-            en_resp(msg,clint_fd);
-        }
+        DbHandle::getInstance()->add_task(sql);
+        char msg[]="heartbeat|1|ok";
+        en_resp(msg,clint_fd);
     }
     // ✓ 不需要手动调用 en_conn()，守卫析构时自动调用
 }
@@ -941,7 +916,15 @@ void handle_response(){
         resp_queue.pop();
         pthread_mutex_unlock(&resp_mutex);
         if(!sendMessage(resp.fd, resp.out)){
-            LOG_ERROR("Failed to send response to fd=" + to_string(resp.fd), ERR_MSG_SEND_FAIL);
+            int err = errno;
+            // 对于 Broken pipe (EPIPE) 或 Connection reset (ECONNRESET)，
+            // 说明客户端已主动断开，这是高并发下的正常现象，记录为 DEBUG 即可，避免污染 ERROR 日志
+            if (err == EPIPE || err == ECONNRESET) {
+                LOG_DEBUG("Client disconnected while sending response to fd=" + to_string(resp.fd));
+            } else {
+                LOG_ERROR("Failed to send response to fd=" + to_string(resp.fd) + 
+                         " (errno=" + to_string(err) + ": " + strerror(err) + ")", ERR_MSG_SEND_FAIL);
+            }
         }
         if(resp.close_after){
             close_clint(epoll_fd,resp.fd);
@@ -949,8 +932,13 @@ void handle_response(){
     }
 }
 void* check_timeout_thread(void* arg) {
+    Config* conf = Config::getInstance();
     MyDb con;
-    con.initDB(HOST, USER, PWD, DB_NAME, 3306);
+    con.initDB(conf->getString("mysql_host", "127.0.0.1"), 
+               conf->getString("mysql_user", "ftpuser"), 
+               conf->getString("mysql_password", "926472"), 
+               conf->getString("mysql_dbname", "Chatroom"), 
+               conf->getInt("mysql_port", 3306));
     while (1) {
         sleep(10);
         string ret;
@@ -970,7 +958,7 @@ void* check_timeout_thread(void* arg) {
         while (user_id) {
             int uid = atoi(user_id);
             string update ="update user_status set is_online=0 where user_id="+to_string(uid);
-            con.exeSQL(update);
+            DbHandle::getInstance()->add_task(update);
             string name = con.get_name(uid);
             pthread_mutex_lock(&client_map_mutex);
             auto it_fd = clint_nametofd.find(name);
@@ -998,6 +986,16 @@ void handleRedisSubscribeMessage(int channel, const string& message)
 }
 
 int main(int argc,char*argv[]){
+    // 1. 加载配置文件
+    string config_path = "../server.conf";
+    if (argc > 1) {
+        config_path = argv[1];
+    }
+    if (!Config::getInstance()->loadConfig(config_path)) {
+        cerr << "Failed to load config file: " << config_path << endl;
+        // 也可以选择退出，或者使用默认值继续
+    }
+
     ErrorCodeManager* errorcodemanager=ErrorCodeManager::getInstance();
     Logger*logger=Logger::getInstance();
     if(!logger->initialize("../logs","chatroom.log",LogLevel::DEBUG,true)){
@@ -1006,6 +1004,12 @@ int main(int argc,char*argv[]){
     }
     LOG_INFO("========Chatroom Server Statring========");
 
+    // 2. 根据配置调整池大小
+    // 注意：这里需要重新设置 pool，或者通过配置初始化
+    // 目前 pool 是全局变量，已经在 main 之前初始化为 16
+    // 如果需要动态修改，可以给 ThreadPool 增加一个 resize 方法
+    // 这里暂时保持 16，或者在 main 中根据配置重新初始化（如果 Pool 支持）
+    
     // 检查并尝试提升文件描述符限制
     struct rlimit rl;
     if (getrlimit(RLIMIT_NOFILE, &rl) == 0) {
@@ -1045,10 +1049,18 @@ int main(int argc,char*argv[]){
     pthread_mutex_init(&g_close_conn_mutex, NULL); // 初始化 close_clint 专用连接锁
     
     // 初始化 close_clint 专用数据库连接
-    if (!g_close_conn.initDB(HOST, USER, PWD, DB_NAME, 3306)) {
+    Config* conf = Config::getInstance();
+    if (!g_close_conn.initDB(conf->getString("mysql_host", "127.0.0.1"), 
+                             conf->getString("mysql_user", "ftpuser"), 
+                             conf->getString("mysql_password", "926472"), 
+                             conf->getString("mysql_dbname", "Chatroom"), 
+                             conf->getInt("mysql_port", 3306))) {
         LOG_FATAL("Failed to initialize global close connection", ERR_DB_CONNECTION_FAIL);
         return 1;
     }
+
+    // 启动异步数据库写入线程
+    DbHandle::getInstance()->start();
 
     srand(time(NULL));
     if (redis_.connect())
@@ -1056,21 +1068,19 @@ int main(int argc,char*argv[]){
         // 设置上报消息的回调
         redis_.init_notify_handler(std::bind(&handleRedisSubscribeMessage, std::placeholders::_1, std::placeholders::_2));
     }
-    // 启动 parser 线程（负责粘包/拆包）
-    pthread_t parser_tid;
-    pthread_mutex_init(&parser_mutex, NULL);
-    pthread_cond_init(&parser_cond, NULL);
-    if(pthread_create(&parser_tid, NULL, parser_thread_func, NULL) != 0){
-        perror("Failed to create parser thread");
-        exit(0);
-    }
+    
+    // 3. 启动 ParserPool（多线程粘包/拆包）
+    int parser_threads = Config::getInstance()->getInt("parser_thread_count", 2);
+    ParserPool::getInstance()->init(parser_threads, &client_buffers, &buffer_map_mutex, &pool);
+    ParserPool::getInstance()->start();
+
     // 启动心跳检测线程
     pthread_t timeout_tid;
     if(pthread_create(&timeout_tid, NULL, check_timeout_thread, NULL) != 0){
         perror("Failed to create timeout thread");
         exit(0);
     }
-    ser_fd=server_init(argc,argv);
+    ser_fd=server_init();
     if(set_unblocking(ser_fd)==0){
         close(ser_fd);
         exit(0);

@@ -11,16 +11,16 @@
 #include<unistd.h>
 #include<pthread.h>
 #include<stdlib.h>
-#include"protocol.h"
+#include"Protocol.h"
 
 #define IP "127.0.0.1"
 #define PORT 8080
-#define BUF_SIZE 4096
+#define BUF_SIZE 65536
 #define EVENTS_NUM 10
 
 // 客户端接收缓冲区（用于处理粘包/拆包）
 struct ClientBuffer {
-    char buffer[PROTOCOL_MAX_TOTAL_SIZE];
+    char buffer[PROTOCOL_MAX_RECV_BUFFER_SIZE];
     int pos;  // 当前缓冲区中的数据长度
     
     ClientBuffer() : pos(0) {

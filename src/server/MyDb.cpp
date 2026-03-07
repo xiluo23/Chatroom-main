@@ -65,8 +65,14 @@ MyDb::~MyDb(){
 }
 
 bool MyDb::initDB(string host,string user,string pwd,string db_name,int port=3306){
-    mysql=mysql_init(NULL); // Re-init if needed, but constructor already did it.
-    // Ensure mysql is valid (constructor does it)
+    if (mysql) {
+        mysql_close(mysql);
+    }
+    mysql = mysql_init(NULL);
+    if (mysql == NULL) {
+        LOG_ERROR("Failed to initialize MySQL structure", ERR_DB_CONNECTION_FAIL);
+        return false;
+    }
 
     if(!mysql_real_connect(mysql,host.c_str(),user.c_str(),pwd.c_str(),db_name.c_str(),port,NULL,0)){
         LOG_ERROR("Failed to connect to database: "+string(db_name)+" on "+host + ". Error: " + mysql_error(mysql), ERR_DB_CONNECTION_FAIL);
