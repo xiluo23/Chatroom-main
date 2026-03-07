@@ -7,6 +7,6 @@
 5. 响应发送 ：处理结果被写入 响应队列 ，并通过 eventfd 唤醒 Reactor 线程，由 Reactor 线程在 I/O 线程中安全地将数据发送回客户端。”
 6. 客户端：客户端采用 WebSocket 协议与服务器通信，确保实时性和双向交互。
 
-在build目录中 cmake ..  make
+./autobuild.sh
 可执行文件在bin目录
 在web_proxy目录中npm start
