@@ -68,7 +68,12 @@ public:
     }
 
 private:
-    Config() {}
+    Config() {
+        if (!loadConfig("/root/Chatroom-main/src/server/server.conf")) {
+            std::cerr << "Failed to load config file " << std::endl;
+            // 也可以选择退出，或者使用默认值继续
+        }
+    }
     ~Config() {}
 
     std::unordered_map<std::string, std::string> _configMap;
