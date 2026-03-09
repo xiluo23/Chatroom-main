@@ -165,39 +165,27 @@ void handle_new_connect(){
             close(clint_fd);
             break;
         }
-        // // 启用TCP_NODELAY，禁用Nagle算法以降低延迟
-        // int nodelay = 1;
-        // if(setsockopt(clint_fd, IPPROTO_TCP, O_NDELAY, &nodelay, sizeof(nodelay)) == -1){
-        //     LOG_WARN("Failed to set TCP_NODELAY for FD="+to_string(clint_fd));
-        // }
+
+        // 预先创建接收缓冲区，作为连接活跃的标识
+        pthread_mutex_lock(&buffer_map_mutex);
+        client_buffers[clint_fd] = make_unique<ClientBuffer>();
+        pthread_mutex_unlock(&buffer_map_mutex);
+
         LOG_INFO("New client connected: FD="+to_string(clint_fd));
     }
 }
 void close_clint(int epoll_fd,int clint_fd){
-    // 访问全局 map 前加锁，判断是否已经关闭
-    string username="";
-    int uid = -1;
-    bool already_closed = false;
-
-    pthread_mutex_lock(&client_map_mutex);
-    auto it_name = clint_fdtoname.find(clint_fd);
-    if (it_name != clint_fdtoname.end()) {
-        username = it_name->second;
-        clint_nametofd.erase(it_name->second);
-        clint_fdtoname.erase(it_name);
-    } else {
-        // 如果不在映射中，可能已经通过 EPOLLRDHUP 等机制关闭了
-        // 我们还需要检查它是否只是一个未登录的连接
-        // 为了保险，我们通过尝试从 epoll 中删除来判断
-        if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, clint_fd, NULL) == -1 && errno == ENOENT) {
-            already_closed = true;
-        }
+    // 使用 buffer_map_mutex 作为全局关闭开关，防止重复调用
+    pthread_mutex_lock(&buffer_map_mutex);
+    if (client_buffers.find(clint_fd) == client_buffers.end()) {
+        // 如果缓冲区已经不存在，说明该 FD 已被关闭并清理过，直接退出
+        pthread_mutex_unlock(&buffer_map_mutex);
+        return;
     }
-    pthread_mutex_unlock(&client_map_mutex);
+    client_buffers.erase(clint_fd); // 移除缓冲区，标记该 FD 已被清理
+    pthread_mutex_unlock(&buffer_map_mutex);
 
-    if (already_closed) return;
-
-    // 如果还没从 epoll 删除（例如未登录用户断开），则执行删除和关闭
+    // 从 epoll 中删除并关闭
     epoll_ctl(epoll_fd, EPOLL_CTL_DEL, clint_fd, NULL);
     close(clint_fd);
     LOG_INFO("Client disconnected: FD="+to_string(clint_fd));
@@ -205,13 +193,19 @@ void close_clint(int epoll_fd,int clint_fd){
     // 从 ParserPool 的待处理队列中移除
     ParserPool::getInstance()->clearFd(clint_fd);
 
-    // 清除该客户端的接收缓冲区
-    pthread_mutex_lock(&buffer_map_mutex);
-    client_buffers.erase(clint_fd);
-    pthread_mutex_unlock(&buffer_map_mutex);
+    // 访问全局用户映射前加锁
+    string username="";
+    pthread_mutex_lock(&client_map_mutex);
+    auto it_name = clint_fdtoname.find(clint_fd);
+    if (it_name != clint_fdtoname.end()) {
+        username = it_name->second;
+        clint_nametofd.erase(it_name->second);
+        clint_fdtoname.erase(it_name);
+    }
+    pthread_mutex_unlock(&client_map_mutex);
 
     if (!username.empty()) {
-        // 使用全局数据库连接更新状态，需加锁
+        // 使用全局数据库连接更新状态
         pthread_mutex_lock(&g_close_conn_mutex);
         if (!g_close_conn.ping()) {
             Config* conf = Config::getInstance();
@@ -222,14 +216,12 @@ void close_clint(int epoll_fd,int clint_fd){
                                conf->getInt("mysql_port", 3306));
         }
         
-        uid = g_close_conn.get_id(username.c_str());
+        int uid = g_close_conn.get_id(username.c_str());
         if (uid != -1) {
             string sql = "update user_status set is_online = 0 where user_id ="+to_string(uid);
-            g_close_conn.exeSQL(sql);
-        }
-        pthread_mutex_unlock(&g_close_conn_mutex);
-
-        if (uid != -1) {
+            DbHandle::getInstance()->add_task(sql);
+            
+            // Redis 退订
             pthread_mutex_lock(&redis_mutex);
             if (redis_subscribed_channels.count(uid)) {
                 if (redis_.unsubscribe(uid)) {
@@ -238,6 +230,7 @@ void close_clint(int epoll_fd,int clint_fd){
             }
             pthread_mutex_unlock(&redis_mutex);
         }
+        pthread_mutex_unlock(&g_close_conn_mutex);
     }
 }
 void handle_clint_data(int epoll_fd,int clint_fd){
