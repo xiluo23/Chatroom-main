@@ -979,16 +979,6 @@ void handleRedisSubscribeMessage(int channel, const string& message)
 }
 
 int main(int argc,char*argv[]){
-    // 1. 加载配置文件
-    string config_path = "/root/Chatroom-main/server.conf";
-    if (argc > 1) {
-        config_path = argv[1];
-    }
-    if (!Config::getInstance()->loadConfig(config_path)) {
-        cerr << "Failed to load config file: " << config_path << endl;
-        // 也可以选择退出，或者使用默认值继续
-    }
-
     ErrorCodeManager* errorcodemanager=ErrorCodeManager::getInstance();
     Logger*logger=Logger::getInstance();
     if(!logger->initialize("../logs","chatroom.log",LogLevel::DEBUG,true)){
