@@ -980,7 +980,7 @@ void handleRedisSubscribeMessage(int channel, const string& message)
 
 int main(int argc,char*argv[]){
     // 1. 加载配置文件
-    string config_path = "../server.conf";
+    string config_path = "/root/Chatroom-main/server.conf";
     if (argc > 1) {
         config_path = argv[1];
     }
