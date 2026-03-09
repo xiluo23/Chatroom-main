@@ -15,19 +15,31 @@ Redis::Redis()
 
 Redis::~Redis()
 {
+    stop();
+}
+
+void Redis::stop()
+{
+    if (!_running) return;
     _running = false;
-    // 这里不再 join 线程，因为它可能在 redisGetReply 中阻塞
-    // 但通过设置 _running = false 和关闭上下文，可以强制其退出
+    _cmd_cv.notify_all(); // 唤醒阻塞的订阅线程
+    
+    if (_sub_thread.joinable())
+    {
+        _sub_thread.join(); // 确保线程完全退出后再释放上下文
+    }
     
     if (_publish_context != nullptr)
     {
         redisFree(_publish_context);
+        _publish_context = nullptr;
     }
 
     if (_subcribe_context != nullptr)
     {
-        // 关闭上下文会使阻塞的 redisGetReply 立即返回错误
+        // 现在可以安全释放，因为子线程已经退出
         redisFree(_subcribe_context);
+        _subcribe_context = nullptr;
     }
 }
 
@@ -58,10 +70,9 @@ bool Redis::connect()
 
     // 在单独的线程中，监听通道上的事件，有消息给业务层进行上报
     _running = true;
-    thread t([&]() {
+    _sub_thread = thread([&]() {
         observer_channel_message();
     });
-    t.detach();
 
     LOG_INFO("connect redis-server success!");
 
@@ -71,6 +82,7 @@ bool Redis::connect()
 // 向redis指定的通道channel发布消息
 bool Redis::publish(int channel, string message)
 {
+    if (!_running) return false;
     redisReply *reply = (redisReply *)redisCommand(_publish_context, "PUBLISH %d %s", channel, message.c_str());
     if (nullptr == reply)
     {
@@ -84,6 +96,7 @@ bool Redis::publish(int channel, string message)
 // 向redis指定的通道subscribe订阅消息
 bool Redis::subscribe(int channel)
 {
+    if (!_running) return false;
     // 将命令入队，由订阅线程串行执行，避免跨线程访问 _subcribe_context
     {
         lock_guard<mutex> lk(_cmd_mutex);
@@ -96,6 +109,7 @@ bool Redis::subscribe(int channel)
 // 向redis指定的通道unsubscribe取消订阅消息
 bool Redis::unsubscribe(int channel)
 {
+    if (!_running) return false;
     {
         lock_guard<mutex> lk(_cmd_mutex);
         _cmd_queue.push({CmdType::UNSUB, channel});
