@@ -7,7 +7,7 @@ const net = require('net');
 // Configuration
 const PORT = 3000;              // HTTP + WebSocket port
 const TCP_HOST = '127.0.0.1';   // C++ Server IP
-const TCP_PORT = 8000;          // C++ Server Port
+const TCP_PORT = 9000;          // C++ Server Port
 
 // Create HTTP Server to serve index.html
 const server = http.createServer((req, res) => {
