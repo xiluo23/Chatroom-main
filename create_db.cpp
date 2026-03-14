@@ -69,7 +69,8 @@ int main() {
             user_id INT PRIMARY KEY,
             is_online TINYINT DEFAULT 0,
             last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES user(user_id)
+            FOREIGN KEY (user_id) REFERENCES user(user_id),
+            INDEX index_isonline_lastactive(is_online,last_active)
         )
     )");
 
