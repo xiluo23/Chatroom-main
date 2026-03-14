@@ -41,7 +41,8 @@ int main() {
             user_name varchar(32) NOT NULL UNIQUE,
             password varchar(64) NOT NULL,
             salt char(8) NOT NULL,
-            create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_name(user_name)
         );
     )");
 
