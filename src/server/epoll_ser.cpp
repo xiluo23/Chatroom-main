@@ -981,7 +981,7 @@ void handleRedisSubscribeMessage(int channel, const string& message)
 int main(int argc,char*argv[]){
     ErrorCodeManager* errorcodemanager=ErrorCodeManager::getInstance();
     Logger*logger=Logger::getInstance();
-    if(!logger->initialize("/root/Chatroom-main/logs","chatroom.log",LogLevel::DEBUG,true)){
+    if(!logger->initialize("../logs","chatroom.log",LogLevel::DEBUG,true)){
         cerr<<"Failed to initialize logger"<<endl;
         return 1;
     }
