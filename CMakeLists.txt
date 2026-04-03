@@ -18,5 +18,5 @@ link_directories(/usr/lib64/mysql)
 add_subdirectory(src)
 
 #数据库创建
-add_executable(create_db create_db.cpp)
-target_link_libraries(create_db mysqlclient)
+# add_executable(create_db create_db.cpp)
+# target_link_libraries(create_db mysqlclient)

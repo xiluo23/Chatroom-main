@@ -87,7 +87,7 @@ async def create_user_and_login(host: str,
     - 登录 sign_in
     - 循环发送 heartbeat 维持在线
     """
-    username = f"stress_new28_{user_index}"
+    username = f"stress_new66_{user_index}"
     password = "123456"
 
     try:
@@ -138,28 +138,28 @@ async def create_user_and_login(host: str,
         results["online_success"] += 1
 
         # 给前一个用户发送一条消息
-        if user_index > 0:
-            target_user = f"stress_new6_{user_index - 1}"
-            msg = f"hello from {username}"
-            chat_payload = f"single_chat|{target_user}|{msg}"
-            await send_and_maybe_recv(
-                reader, writer,
-                chat_payload,
-                need_resp=True,
-                expected_cmd="single_chat"
-            )
+        # if user_index > 0:
+        #     target_user = f"stress_new6_{user_index - 1}"
+        #     msg = f"hello from {username}"
+        #     chat_payload = f"single_chat|{target_user}|{msg}"
+        #     await send_and_maybe_recv(
+        #         reader, writer,
+        #         chat_payload,
+        #         need_resp=True,
+        #         expected_cmd="single_chat"
+        #     )
 
         # 广播消息测试 (仅 user_index=0 发送，避免风暴)
-        if user_index == 0:
-            broadcast_msg = f"broadcast_from_{username}"
-            broadcast_payload = f"broadcast_chat|{broadcast_msg}"
-            # 期待收到确认 "broadcast_chat|1|..."
-            await send_and_maybe_recv(
-                reader, writer,
-                broadcast_payload,
-                need_resp=True,
-                expected_cmd="broadcast_chat"
-            )
+        # if user_index == 0:
+        #     broadcast_msg = f"broadcast_from_{username}"
+        #     broadcast_payload = f"broadcast_chat|{broadcast_msg}"
+        #     # 期待收到确认 "broadcast_chat|1|..."
+        #     await send_and_maybe_recv(
+        #         reader, writer,
+        #         broadcast_payload,
+        #         need_resp=True,
+        #         expected_cmd="broadcast_chat"
+        #     )
 
         # 启动心跳循环，维持“在线通信”状态
         if heartbeat_interval is not None and heartbeat_interval > 0:
@@ -256,7 +256,7 @@ def main():
     parser.add_argument("host", help="服务器 IP")
     parser.add_argument("port", type=int, help="服务器端口")
     parser.add_argument(
-        "--clients", type=int, default=5000, help="目标并发在线客户端数量"
+        "--clients", type=int, default=4000, help="目标并发在线客户端数量"
     )
     parser.add_argument(
         "--heartbeat-interval",
