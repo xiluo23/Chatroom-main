@@ -1507,16 +1507,6 @@ void check_timeout(){
 
 
 int main(int argc,char*argv[]){
-    // 1. 加载配置文件
-    string config_path = "../server.conf";
-    if (argc > 1) {
-        config_path = argv[1];
-    }
-    if (!Config::getInstance()->loadConfig(config_path)) {
-        cerr << "Failed to load config file: " << config_path << endl;
-        // 也可以选择退出，或者使用默认值继续
-    }
-
     ErrorCodeManager* errorcodemanager=ErrorCodeManager::getInstance();
     Logger*logger=Logger::getInstance();
     if(!logger->initialize("../logs","chatroom.log",LogLevel::DEBUG,true)){
@@ -1729,6 +1719,12 @@ int main(int argc,char*argv[]){
 
     close(ser_fd);
     close(epoll_fd);
+    
+    // 在销毁日志系统之前停止所有后台服务，确保日志记录完整
+    ParserPool::getInstance()->stop();
+    DbHandle::getInstance()->stop();
+    redis_.stop();
+    
     Logger::destroy();
     return 0;
 }

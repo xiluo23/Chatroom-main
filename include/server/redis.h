@@ -39,6 +39,9 @@ public:
     // 初始化向业务层上报通道消息的回调对象
     void init_notify_handler(function<void(int, string)> fn);
 
+    // 停止 Redis 服务，断开连接并退出子线程
+    void stop();
+
 private:
     enum class CmdType { SUB, UNSUB };
     struct Cmd { CmdType type; int channel; };
@@ -57,6 +60,7 @@ private:
     mutex _cmd_mutex;
     condition_variable _cmd_cv;
     atomic<bool> _running{false};
+    thread _sub_thread; // 订阅线程对象
     
     void process_pending_commands();
     
