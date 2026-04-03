@@ -1,5 +1,6 @@
 #include"epoll_ser.h"
 #include"DbConnectionGuard.h"
+#include<sys/timerfd.h>
 #include"MyDb.h"
 #include"Logger.h"
 #include"ErrorCode.h"
@@ -13,6 +14,7 @@
 #include"Dbhandle.h"
 #include"ParserPool.h"
 #include"CpuGuard.h"
+#include<mutex>
 using namespace std;
 unordered_map<string,int>clint_nametofd;
 unordered_map<int,string>clint_fdtoname;
@@ -21,12 +23,16 @@ pthread_mutex_t client_map_mutex; // 在头文件中声明为 extern
 pthread_mutex_t crypt_mutex; // 保护 crypt 函数的互斥锁
 ThreadPool pool(16);  
 Redis redis_;
-int ser_fd,epoll_fd;
-int event_fd=eventfd(0,EFD_NONBLOCK);
+int ser_fd,epoll_fd,tfd;
+int event_fd;
 queue<Response>resp_queue;
 #include<memory>
 unordered_map<int, unique_ptr<ClientBuffer>> client_buffers;  // 为每个客户端维护接收缓冲区，使用 unique_ptr 减少拷贝
+unordered_map<int,time_t> latest_expire;
+priority_queue<Timer, vector<Timer>, greater<Timer>> hp;
+static const int HEARTBEAT_TIMEOUT_SEC = 60; // 心跳超时时间
 pthread_mutex_t buffer_map_mutex;  // 保护 client_buffers 的互斥锁
+pthread_mutex_t timer_mutex = PTHREAD_MUTEX_INITIALIZER; // 保护 hp 和 latest_expire
 
 // 专用于 close_clint 的全局数据库连接及互斥锁
 MyDb g_close_conn;
@@ -48,6 +54,15 @@ void handle_sigint(int signo){
     write(event_fd,&one,sizeof(one));
 }
 // SQL 字符串转义，防止单引号导致的语句错误
+void update_expire(int clint_fd){
+    time_t now = time(NULL);
+    time_t expire = now + HEARTBEAT_TIMEOUT_SEC;
+    latest_expire[clint_fd] = expire;
+    Timer timer;
+    timer.fd = clint_fd;
+    timer.expire = expire;
+    hp.push(timer);
+}
 static string escape_sql(const string &s) {
     string res;
     res.reserve(s.size());
@@ -90,7 +105,6 @@ int server_init(){
     }
     memset(&ser_addr,0,sizeof(ser_addr));
     ser_addr.sin_family=AF_INET;
-    //127.0.0.1 6000
     ser_addr.sin_port=htons(port);
     ser_addr.sin_addr.s_addr=htonl(INADDR_ANY);
     int opt=1;
@@ -165,39 +179,33 @@ void handle_new_connect(){
             close(clint_fd);
             break;
         }
-        // // 启用TCP_NODELAY，禁用Nagle算法以降低延迟
-        // int nodelay = 1;
-        // if(setsockopt(clint_fd, IPPROTO_TCP, O_NDELAY, &nodelay, sizeof(nodelay)) == -1){
-        //     LOG_WARN("Failed to set TCP_NODELAY for FD="+to_string(clint_fd));
-        // }
+
+        // 预先创建接收缓冲区，作为连接活跃的标识
+        pthread_mutex_lock(&buffer_map_mutex);
+        client_buffers[clint_fd] = make_unique<ClientBuffer>();
+        pthread_mutex_unlock(&buffer_map_mutex);
+
+        // 新连接也需要初始化超时时间，避免无心跳连接无限保留
+        update_expire(clint_fd);
+
         LOG_INFO("New client connected: FD="+to_string(clint_fd));
     }
 }
 void close_clint(int epoll_fd,int clint_fd){
-    // 访问全局 map 前加锁，判断是否已经关闭
-    string username="";
-    int uid = -1;
-    bool already_closed = false;
-
-    pthread_mutex_lock(&client_map_mutex);
-    auto it_name = clint_fdtoname.find(clint_fd);
-    if (it_name != clint_fdtoname.end()) {
-        username = it_name->second;
-        clint_nametofd.erase(it_name->second);
-        clint_fdtoname.erase(it_name);
-    } else {
-        // 如果不在映射中，可能已经通过 EPOLLRDHUP 等机制关闭了
-        // 我们还需要检查它是否只是一个未登录的连接
-        // 为了保险，我们通过尝试从 epoll 中删除来判断
-        if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, clint_fd, NULL) == -1 && errno == ENOENT) {
-            already_closed = true;
-        }
+    // 使用 buffer_map_mutex 作为全局关闭开关，防止重复调用
+    pthread_mutex_lock(&buffer_map_mutex);
+    if (client_buffers.find(clint_fd) == client_buffers.end()) {
+        // 如果缓冲区已经不存在，说明该 FD 已被关闭并清理过，直接退出
+        pthread_mutex_unlock(&buffer_map_mutex);
+        return;
     }
-    pthread_mutex_unlock(&client_map_mutex);
+    client_buffers.erase(clint_fd); // 移除缓冲区，标记该 FD 已被清理
+    pthread_mutex_unlock(&buffer_map_mutex);
 
-    if (already_closed) return;
+    // 取消超时记录，避免后续 timer heap 的懒删除误判
+    latest_expire.erase(clint_fd);
 
-    // 如果还没从 epoll 删除（例如未登录用户断开），则执行删除和关闭
+    // 从 epoll 中删除并关闭
     epoll_ctl(epoll_fd, EPOLL_CTL_DEL, clint_fd, NULL);
     close(clint_fd);
     LOG_INFO("Client disconnected: FD="+to_string(clint_fd));
@@ -205,13 +213,19 @@ void close_clint(int epoll_fd,int clint_fd){
     // 从 ParserPool 的待处理队列中移除
     ParserPool::getInstance()->clearFd(clint_fd);
 
-    // 清除该客户端的接收缓冲区
-    pthread_mutex_lock(&buffer_map_mutex);
-    client_buffers.erase(clint_fd);
-    pthread_mutex_unlock(&buffer_map_mutex);
+    // 访问全局用户映射前加锁
+    string username="";
+    pthread_mutex_lock(&client_map_mutex);
+    auto it_name = clint_fdtoname.find(clint_fd);
+    if (it_name != clint_fdtoname.end()) {
+        username = it_name->second;
+        clint_nametofd.erase(it_name->second);
+        clint_fdtoname.erase(it_name);
+    }
+    pthread_mutex_unlock(&client_map_mutex);
 
     if (!username.empty()) {
-        // 使用全局数据库连接更新状态，需加锁
+        // 使用全局数据库连接更新状态
         pthread_mutex_lock(&g_close_conn_mutex);
         if (!g_close_conn.ping()) {
             Config* conf = Config::getInstance();
@@ -222,14 +236,12 @@ void close_clint(int epoll_fd,int clint_fd){
                                conf->getInt("mysql_port", 3306));
         }
         
-        uid = g_close_conn.get_id(username.c_str());
+        int uid = g_close_conn.get_id(username.c_str());
         if (uid != -1) {
             string sql = "update user_status set is_online = 0 where user_id ="+to_string(uid);
-            g_close_conn.exeSQL(sql);
-        }
-        pthread_mutex_unlock(&g_close_conn_mutex);
-
-        if (uid != -1) {
+            DbHandle::getInstance()->add_task(sql);
+            
+            // Redis 退订
             pthread_mutex_lock(&redis_mutex);
             if (redis_subscribed_channels.count(uid)) {
                 if (redis_.unsubscribe(uid)) {
@@ -238,6 +250,7 @@ void close_clint(int epoll_fd,int clint_fd){
             }
             pthread_mutex_unlock(&redis_mutex);
         }
+        pthread_mutex_unlock(&g_close_conn_mutex);
     }
 }
 void handle_clint_data(int epoll_fd,int clint_fd){
@@ -326,21 +339,23 @@ void process_clint_data(Task&task){
 
     // 处理 Redis 订阅入队的消息
     if(task.type == SUB_MSG){
-        // 格式: cmd|code|msgid|payload
-        char buf[BUF_SIZE];
-        size_t len = min(task.message.size(), (size_t)BUF_SIZE - 1);
-        memcpy(buf, task.message.data(), len);
-        buf[len] = '\0';
-        char* saveptr = NULL;
-        char* cmd = strtok_r(buf, "|", &saveptr);
-        char* code = strtok_r(NULL, "|", &saveptr);
-        char* msgid_str = strtok_r(NULL, "|", &saveptr);
-        char* payload = strtok_r(NULL, "|", &saveptr); // payload expected like "from;text"
-        if(!cmd || !msgid_str || !payload){
+        const string& m = task.message;
+        size_t p1 = m.find('|');
+        size_t p2 = (p1 == string::npos) ? string::npos : m.find('|', p1 + 1);
+        size_t p3 = (p2 == string::npos) ? string::npos : m.find('|', p2 + 1);
+        if (p1 == string::npos || p2 == string::npos || p3 == string::npos) {
             LOG_WARN("Invalid SUB_MSG payload: " + task.message);
             return;
         }
-        long long msgid = atoll(msgid_str);
+        string cmd = m.substr(0, p1);
+        string code = m.substr(p1 + 1, p2 - p1 - 1);
+        string msgid_str = m.substr(p2 + 1, p3 - p2 - 1);
+        string payload = m.substr(p3 + 1);
+        if (cmd.empty() || msgid_str.empty() || payload.empty()) {
+            LOG_WARN("Invalid SUB_MSG payload: " + task.message);
+            return;
+        }
+        long long msgid = atoll(msgid_str.c_str());
             // payload 例如: "from;text"
             // 查找 channel（receiver）是否在本机在线
             int receiver_id = task.channel;
@@ -354,7 +369,7 @@ void process_clint_data(Task&task){
                 // 转发给客户端：保持消息内容不含 msgid（和本机消息一致）
                 // payload 形如 "from;text"，构造 client 消息: cmd|code|from;text
                 char out[BUF_SIZE];
-                snprintf(out, BUF_SIZE-1, "%s|%s|%s", cmd, code, payload);
+                snprintf(out, BUF_SIZE-1, "%s|%s|%s", cmd.c_str(), code.c_str(), payload.c_str());
                 out[strlen(out)] = 0;
                 en_resp(out, to_fd);
                 // 异步更新 DB：通过 msgid 标记已投递
@@ -511,9 +526,16 @@ void process_clint_data(Task&task){
                         }
                     }
                     pthread_mutex_unlock(&redis_mutex);
-                    //查询是否有未读信息
+                    // 查询是否有未读信息（离线消息）
                     string ret="";
-                    string sql="select su.user_name,c.send_time,c.content from chat_log c join user ru on c.receiver_id=ru.user_id join user su on c.sender_id=su.user_id where ru.user_name='"+string(username)+"' and c.is_delivered=0 order by c.send_time";
+                    // 返回字段：sender_name send_time group_type conversation_id content
+                    // conversation_id 用于群聊离线消息定位具体群
+                    string sql="select su.user_name,c.send_time,c.group_type,ifnull(c.conversation_id,0),c.content "
+                               "from chat_log c "
+                               "join user ru on c.receiver_id=ru.user_id "
+                               "join user su on c.sender_id=su.user_id "
+                               "where ru.user_name='"+string(username)+"' and c.is_delivered=0 "
+                               "order by c.send_time";
                     conn->select_many_SQL(sql,ret);
                     if(ret.empty()){
                         return ;
@@ -551,15 +573,45 @@ void process_clint_data(Task&task){
             en_resp(msg,clint_fd);
         }
     }
+    else if(strcmp(cmd,"show_groups")==0){
+        pthread_mutex_lock(&client_map_mutex);
+        auto it_name = clint_fdtoname.find(clint_fd);
+        string my_name = (it_name != clint_fdtoname.end()) ? it_name->second : "";
+        pthread_mutex_unlock(&client_map_mutex);
+        if(my_name.empty()) return;
+
+        int my_id = conn->get_id(my_name.c_str());
+        // 查询用户加入的所有群组
+        string sql = "select c.conversation_id, c.name from conversation c join conversation_member m on c.conversation_id = m.conversation_id where m.user_id = " + to_string(my_id);
+        string ret;
+        if(conn->select_many_SQL(sql, ret)){
+            char msg[BUF_SIZE];
+            snprintf(msg, BUF_SIZE-1, "show_groups|1|%s", ret.c_str());
+            en_resp(msg, clint_fd);
+        } else {
+            char msg[]="show_groups|1|暂无群组";
+            en_resp(msg, clint_fd);
+        }
+    }
     else if(strcmp(cmd,"single_chat")==0){
         // 访问映射加锁
         pthread_mutex_lock(&client_map_mutex);
         auto it_name = clint_fdtoname.find(clint_fd);
         string from_name = (it_name != clint_fdtoname.end()) ? it_name->second : "";
         pthread_mutex_unlock(&client_map_mutex);
+        if(from_name.empty()){
+            char msg[]="single_chat|0|未登录";
+            en_resp(msg, clint_fd);
+            return;
+        }
         const char*from=from_name.c_str();
         const char*to=strtok_r(NULL,"|",&saveptr);
         const char*text=strtok_r(NULL,"|",&saveptr);
+        if(!to || !text){
+            char msg[]="single_chat|0|参数错误";
+            en_resp(msg, clint_fd);
+            return;
+        }
         string receiver_id=to_string(conn->get_id(to));
         if(receiver_id=="-1"){//发送给的用户不存在
             char msg[BUF_SIZE];
@@ -569,6 +621,20 @@ void process_clint_data(Task&task){
             return ;
         }
         string sender_id=to_string(conn->get_id(from));
+
+        // 只允许好友之间进行单播
+        {
+            string friend_ok;
+            string check_sql =
+                "select 1 from friend_relation "
+                "where user_id=" + sender_id + " and friend_id=" + receiver_id + " and status='accepted' limit 1";
+            if(!conn->select_one_SQL(check_sql, friend_ok)){
+                char msg[]="single_chat|0|请先添加好友";
+                en_resp(msg, clint_fd);
+                return;
+            }
+        }
+
         string group_type="single";
         pthread_mutex_lock(&client_map_mutex);
         bool online_local = clint_nametofd.count(to);
@@ -812,6 +878,414 @@ void process_clint_data(Task&task){
         msg_resp[strlen(msg_resp)]=0;
         en_resp(msg_resp,clint_fd);
     }
+    else if(strcmp(cmd,"add_friend")==0){
+        char*friend_name=strtok_r(NULL,"|",&saveptr);
+        if(!friend_name){
+            char msg[]="add_friend|0|参数错误";
+            en_resp(msg,clint_fd);
+            return;
+        }
+        pthread_mutex_lock(&client_map_mutex);
+        auto it_name = clint_fdtoname.find(clint_fd);
+        string my_name = (it_name != clint_fdtoname.end()) ? it_name->second : "";
+        pthread_mutex_unlock(&client_map_mutex);
+        if(my_name.empty()) return;
+
+        int my_id = conn->get_id(my_name.c_str());
+        int friend_id = conn->get_id(friend_name);
+        if(friend_id == -1){
+            char msg[]="add_friend|0|用户不存在";
+            en_resp(msg,clint_fd);
+            return;
+        }
+        if(my_id == friend_id){
+            char msg[]="add_friend|0|不能添加自己";
+            en_resp(msg,clint_fd);
+            return;
+        }
+
+        string sql = "insert into friend_relation (user_id, friend_id, status) values (" + to_string(my_id) + "," + to_string(friend_id) + ",'pending')";
+        if(conn->exeSQL(sql)){
+            char msg[]="add_friend|1|已发送申请";
+            en_resp(msg,clint_fd);
+            // 如果对方在线，可以发送实时通知
+            pthread_mutex_lock(&client_map_mutex);
+            if(clint_nametofd.count(friend_name)){
+                int to_fd = clint_nametofd[friend_name];
+                char notice[BUF_SIZE];
+                snprintf(notice, BUF_SIZE-1, "friend_request|1|%s", my_name.c_str());
+                en_resp(notice, to_fd);
+            } else {
+                // Redis 转发
+                char pub_msg[BUF_SIZE];
+                snprintf(pub_msg, BUF_SIZE-1, "friend_request|1|0|%s", my_name.c_str());
+                pthread_mutex_lock(&redis_mutex);
+                redis_.publish(friend_id, string(pub_msg));
+                pthread_mutex_unlock(&redis_mutex);
+            }
+            pthread_mutex_unlock(&client_map_mutex);
+        } else {
+            char msg[]="add_friend|0|已发送过申请或已是好友";
+            en_resp(msg,clint_fd);
+        }
+    }
+    else if(strcmp(cmd,"handle_friend")==0){
+        char*friend_name=strtok_r(NULL,"|",&saveptr);
+        char*status=strtok_r(NULL,"|",&saveptr); // accepted or rejected
+        if(!friend_name || !status){
+            char msg[]="handle_friend|0|参数错误";
+            en_resp(msg,clint_fd);
+            return;
+        }
+        pthread_mutex_lock(&client_map_mutex);
+        auto it_name = clint_fdtoname.find(clint_fd);
+        string my_name = (it_name != clint_fdtoname.end()) ? it_name->second : "";
+        pthread_mutex_unlock(&client_map_mutex);
+        if(my_name.empty()) return;
+
+        int my_id = conn->get_id(my_name.c_str());
+        int friend_id = conn->get_id(friend_name);
+        
+        string sql = "update friend_relation set status='" + string(status) + "' where user_id=" + to_string(friend_id) + " and friend_id=" + to_string(my_id);
+        if(conn->exeSQL(sql)){
+            if(strcmp(status, "accepted") == 0){
+                // 互相成为好友
+                string sql2 = "insert ignore into friend_relation (user_id, friend_id, status) values (" + to_string(my_id) + "," + to_string(friend_id) + ",'accepted')";
+                conn->exeSQL(sql2);
+                char msg[]="handle_friend|1|已添加好友";
+                en_resp(msg,clint_fd);
+                
+                // 通知对方（发起方）已通过，对方前端收到 handle_friend 会自动刷新好友列表
+                pthread_mutex_lock(&client_map_mutex);
+                if(clint_nametofd.count(friend_name)){
+                    int to_fd = clint_nametofd[friend_name];
+                    char notice[BUF_SIZE];
+                    snprintf(notice, BUF_SIZE-1, "handle_friend|1|%s 已接受了你的好友申请", my_name.c_str());
+                    en_resp(notice, to_fd);
+                } else {
+                    // Redis 转发，确保跨服务器也能收到通知
+                    char pub_msg[BUF_SIZE];
+                    snprintf(pub_msg, BUF_SIZE-1, "handle_friend|1|0|%s 已接受了你的好友申请", my_name.c_str());
+                    pthread_mutex_lock(&redis_mutex);
+                    redis_.publish(friend_id, string(pub_msg));
+                    pthread_mutex_unlock(&redis_mutex);
+                }
+                pthread_mutex_unlock(&client_map_mutex);
+            } else {
+                char msg[]="handle_friend|1|已拒绝申请";
+                en_resp(msg,clint_fd);
+            }
+        } else {
+            char msg[]="handle_friend|0|处理失败";
+            en_resp(msg,clint_fd);
+        }
+    }
+    else if(strcmp(cmd,"show_friends")==0){
+        pthread_mutex_lock(&client_map_mutex);
+        auto it_name = clint_fdtoname.find(clint_fd);
+        string my_name = (it_name != clint_fdtoname.end()) ? it_name->second : "";
+        pthread_mutex_unlock(&client_map_mutex);
+        if(my_name.empty()) return;
+
+        int my_id = conn->get_id(my_name.c_str());
+        string sql = "select u.user_name from friend_relation f join user u on f.friend_id = u.user_id where f.user_id=" + to_string(my_id) + " and f.status='accepted'";
+        string ret;
+        if(conn->select_many_SQL(sql, ret)){
+            char msg[BUF_SIZE];
+            snprintf(msg, BUF_SIZE-1, "show_friends|1|%s", ret.c_str());
+            en_resp(msg, clint_fd);
+        } else {
+            char msg[]="show_friends|1|暂无好友";
+            en_resp(msg, clint_fd);
+        }
+    }
+    else if(strcmp(cmd,"create_group")==0){
+        char*group_name=strtok_r(NULL,"|",&saveptr);
+        if(!group_name){
+            char msg[]="create_group|0|参数错误";
+            en_resp(msg,clint_fd);
+            return;
+        }
+        pthread_mutex_lock(&client_map_mutex);
+        auto it_name = clint_fdtoname.find(clint_fd);
+        string my_name = (it_name != clint_fdtoname.end()) ? it_name->second : "";
+        pthread_mutex_unlock(&client_map_mutex);
+        if(my_name.empty()) return;
+
+        int my_id = conn->get_id(my_name.c_str());
+        string sql = "insert into conversation (type, name, owner_id) values ('group', '" + string(group_name) + "', " + to_string(my_id) + ")";
+        if(conn->exeSQL(sql)){
+            long long conv_id = conn->get_last_insert_id();
+            string sql2 = "insert into conversation_member (conversation_id, user_id, role) values (" + to_string(conv_id) + ", " + to_string(my_id) + ", 'admin')";
+            conn->exeSQL(sql2);
+            char msg[BUF_SIZE];
+            snprintf(msg, BUF_SIZE-1, "create_group|1|群组创建成功，ID:%lld", conv_id);
+            en_resp(msg, clint_fd);
+        } else {
+            char msg[]="create_group|0|创建失败";
+            en_resp(msg, clint_fd);
+        }
+    }
+    else if(strcmp(cmd,"delete_friend")==0){
+        char*friend_name=strtok_r(NULL,"|",&saveptr);
+        if(!friend_name){
+            char msg[]="delete_friend|0|参数错误";
+            en_resp(msg,clint_fd);
+            return;
+        }
+        pthread_mutex_lock(&client_map_mutex);
+        auto it_name = clint_fdtoname.find(clint_fd);
+        string my_name = (it_name != clint_fdtoname.end()) ? it_name->second : "";
+        pthread_mutex_unlock(&client_map_mutex);
+        if(my_name.empty()) return;
+
+        int my_id = conn->get_id(my_name.c_str());
+        int friend_id = conn->get_id(friend_name);
+        
+        string sql = "delete from friend_relation where (user_id=" + to_string(my_id) + " and friend_id=" + to_string(friend_id) + ") or (user_id=" + to_string(friend_id) + " and friend_id=" + to_string(my_id) + ")";
+        if(conn->exeSQL(sql)){
+            char msg[]="delete_friend|1|已删除好友";
+            en_resp(msg,clint_fd);
+        } else {
+            char msg[]="delete_friend|0|删除失败";
+            en_resp(msg,clint_fd);
+        }
+    }
+    else if(strcmp(cmd,"join_group")==0){
+        char*group_id_str=strtok_r(NULL,"|",&saveptr);
+        if(!group_id_str){
+            char msg[]="join_group|0|参数错误";
+            en_resp(msg,clint_fd);
+            return;
+        }
+        pthread_mutex_lock(&client_map_mutex);
+        auto it_name = clint_fdtoname.find(clint_fd);
+        string my_name = (it_name != clint_fdtoname.end()) ? it_name->second : "";
+        pthread_mutex_unlock(&client_map_mutex);
+        if(my_name.empty()) return;
+
+        int my_id = conn->get_id(my_name.c_str());
+        string sql = "insert into conversation_member (conversation_id, user_id) values (" + string(group_id_str) + ", " + to_string(my_id) + ")";
+        if(conn->exeSQL(sql)){
+            char msg[]="join_group|1|成功加入群组";
+            en_resp(msg, clint_fd);
+        } else {
+            char msg[]="join_group|0|群组不存在或已在群中";
+            en_resp(msg, clint_fd);
+        }
+    }
+    else if(strcmp(cmd,"quit_group")==0){
+        char*group_id_str=strtok_r(NULL,"|",&saveptr);
+        if(!group_id_str){
+            char msg[]="quit_group|0|参数错误";
+            en_resp(msg,clint_fd);
+            return;
+        }
+        pthread_mutex_lock(&client_map_mutex);
+        auto it_name = clint_fdtoname.find(clint_fd);
+        string my_name = (it_name != clint_fdtoname.end()) ? it_name->second : "";
+        pthread_mutex_unlock(&client_map_mutex);
+        if(my_name.empty()) return;
+
+        int my_id = conn->get_id(my_name.c_str());
+        string sql = "delete from conversation_member where conversation_id=" + string(group_id_str) + " and user_id=" + to_string(my_id);
+        if(conn->exeSQL(sql)){
+            char msg[]="quit_group|1|成功退出群组";
+            en_resp(msg, clint_fd);
+        } else {
+            char msg[]="quit_group|0|退出失败";
+            en_resp(msg, clint_fd);
+        }
+    }
+    else if(strcmp(cmd,"show_group_members")==0){
+        char*group_id_str=strtok_r(NULL,"|",&saveptr);
+        if(!group_id_str){
+            char msg[]="show_group_members|0|参数错误";
+            en_resp(msg,clint_fd);
+            return;
+        }
+        string sql = "select u.user_name from conversation_member m join user u on m.user_id = u.user_id where m.conversation_id = " + string(group_id_str);
+        string ret;
+        if(conn->select_many_SQL(sql, ret)){
+            char msg[BUF_SIZE];
+            snprintf(msg, BUF_SIZE-1, "show_group_members|2|%s", ret.c_str());
+            en_resp(msg, clint_fd);
+        } else {
+            char msg[]="show_group_members|0|获取成员失败";
+            en_resp(msg, clint_fd);
+        }
+    }
+    else if(strcmp(cmd,"invite_group")==0){
+        char*conv_id_str=strtok_r(NULL,"|",&saveptr);
+        char*friend_name=strtok_r(NULL,"|",&saveptr);
+        if(!conv_id_str || !friend_name){
+            char msg[]="invite_group|0|参数错误";
+            en_resp(msg,clint_fd);
+            return;
+        }
+
+        pthread_mutex_lock(&client_map_mutex);
+        auto it_name = clint_fdtoname.find(clint_fd);
+        string my_name = (it_name != clint_fdtoname.end()) ? it_name->second : "";
+        pthread_mutex_unlock(&client_map_mutex);
+        if(my_name.empty()) return;
+
+        int my_id = conn->get_id(my_name.c_str());
+        int friend_id = conn->get_id(friend_name);
+        if(friend_id == -1){
+            char msg[]="invite_group|0|用户不存在";
+            en_resp(msg,clint_fd);
+            return;
+        }
+        if(friend_id == my_id){
+            char msg[]="invite_group|0|不能邀请自己";
+            en_resp(msg,clint_fd);
+            return;
+        }
+
+        string group_name;
+        if(!conn->select_one_SQL("select ifnull(name,'') from conversation where conversation_id=" + string(conv_id_str) + " and type='group' limit 1", group_name)){
+            char msg[]="invite_group|0|群组不存在";
+            en_resp(msg,clint_fd);
+            return;
+        }
+
+        // 必须是群管理员才能邀请
+        string role;
+        if(!conn->select_one_SQL("select role from conversation_member where conversation_id=" + string(conv_id_str) + " and user_id=" + to_string(my_id) + " limit 1", role)){
+            char msg[]="invite_group|0|你不在该群组中";
+            en_resp(msg,clint_fd);
+            return;
+        }
+        if(role != "admin"){
+            char msg[]="invite_group|0|无权限邀请";
+            en_resp(msg,clint_fd);
+            return;
+        }
+
+        // 只能邀请已添加的好友
+        string friend_ok;
+        if(!conn->select_one_SQL("select 1 from friend_relation where user_id=" + to_string(my_id) + " and friend_id=" + to_string(friend_id) + " and status='accepted' limit 1", friend_ok)){
+            char msg[]="invite_group|0|只能邀请好友";
+            en_resp(msg,clint_fd);
+            return;
+        }
+
+        string exists;
+        if(conn->select_one_SQL("select 1 from conversation_member where conversation_id=" + string(conv_id_str) + " and user_id=" + to_string(friend_id) + " limit 1", exists)){
+            char msg[]="invite_group|0|对方已在群中";
+            en_resp(msg,clint_fd);
+            return;
+        }
+
+        string sql = "insert into conversation_member (conversation_id, user_id) values (" + string(conv_id_str) + ", " + to_string(friend_id) + ")";
+        if(conn->exeSQL(sql)){
+            char msg[BUF_SIZE];
+            snprintf(msg, BUF_SIZE-1, "invite_group|1|已邀请 %s 加入群组 %s", friend_name, group_name.c_str());
+            en_resp(msg,clint_fd);
+
+            bool online_local = false;
+            int to_fd = -1;
+            pthread_mutex_lock(&client_map_mutex);
+            if(clint_nametofd.count(friend_name)){
+                online_local = true;
+                to_fd = clint_nametofd[friend_name];
+            }
+            pthread_mutex_unlock(&client_map_mutex);
+
+            if(online_local){
+                char notice[BUF_SIZE];
+                snprintf(notice, BUF_SIZE-1, "group_invite|2|%s|%s|%s", conv_id_str, group_name.c_str(), my_name.c_str());
+                en_resp(notice, to_fd);
+            } else {
+                char pub_msg[BUF_SIZE];
+                snprintf(pub_msg, BUF_SIZE-1, "group_invite|2|%s|%s|%s", conv_id_str, group_name.c_str(), my_name.c_str());
+                pthread_mutex_lock(&redis_mutex);
+                redis_.publish(friend_id, string(pub_msg));
+                pthread_mutex_unlock(&redis_mutex);
+            }
+        } else {
+            char msg[]="invite_group|0|邀请失败";
+            en_resp(msg,clint_fd);
+        }
+    }
+    else if(strcmp(cmd,"group_chat")==0){
+        char*conv_id_str=strtok_r(NULL,"|",&saveptr);
+        const char*text=strtok_r(NULL,"|",&saveptr);
+        if(!conv_id_str || !text){
+            char msg[]="group_chat|0|参数错误";
+            en_resp(msg, clint_fd);
+            return;
+        }
+        pthread_mutex_lock(&client_map_mutex);
+        auto it_name = clint_fdtoname.find(clint_fd);
+        string from_name = (it_name != clint_fdtoname.end()) ? it_name->second : "";
+        pthread_mutex_unlock(&client_map_mutex);
+        if(from_name.empty()) return;
+
+        int sender_id = conn->get_id(from_name.c_str());
+        int conv_id = atoi(conv_id_str);
+
+        // 获取群组内所有成员
+        string sql_members = "select u.user_name from conversation_member m join user u on m.user_id = u.user_id where m.conversation_id = " + to_string(conv_id);
+        string members_ret;
+        if(conn->select_many_SQL(sql_members, members_ret)){
+            // 构造消息
+            char msg[BUF_SIZE];
+            snprintf(msg, BUF_SIZE-1, "group_chat|1|%d|%s;%s", conv_id, from_name.c_str(), text);
+            msg[strlen(msg)] = 0;
+
+            // 遍历成员发送
+            char* members_buf = strdup(members_ret.c_str());
+            char* m_saveptr = NULL;
+            char* member_name = strtok_r(members_buf, "\n", &m_saveptr);
+            while(member_name){
+                // Trim trailing space added by select_many_SQL
+                char* p = member_name + strlen(member_name) - 1;
+                while(p >= member_name && isspace(*p)) {
+                    *p = '\0';
+                    p--;
+                }
+                
+                if(strlen(member_name) > 0 && strcmp(member_name, from_name.c_str()) != 0){
+                    pthread_mutex_lock(&client_map_mutex);
+                    bool online_local = clint_nametofd.count(member_name);
+                    int to_fd = online_local ? clint_nametofd[member_name] : -1;
+                    pthread_mutex_unlock(&client_map_mutex);
+
+                    int receiver_id = conn->get_id(member_name);
+                    string esc_text = escape_sql(string(text));
+                    string is_delivered = online_local ? "1" : "0";
+                    string insert_sql = "insert into chat_log (sender_id,receiver_id,is_delivered,group_type,content,conversation_id) values("+to_string(sender_id)+","+to_string(receiver_id)+","+is_delivered+",'multi','"+esc_text+"',"+to_string(conv_id)+")";
+                    conn->exeSQL(insert_sql);
+                    long long msgid = conn->get_last_insert_id();
+
+                    if(online_local){
+                        en_resp(msg, to_fd);
+                    } else {
+                        // Redis 转发
+                        char pub_msg[BUF_SIZE];
+                        snprintf(pub_msg, BUF_SIZE-1, "group_chat|1|%lld|%d|%s;%s", msgid, conv_id, from_name.c_str(), text);
+                        pthread_mutex_lock(&redis_mutex);
+                        redis_.publish(receiver_id, string(pub_msg));
+                        pthread_mutex_unlock(&redis_mutex);
+                    }
+                }
+                member_name = strtok_r(NULL, "\n", &m_saveptr);
+            }
+            free(members_buf);
+            
+            char ok_msg[] = "group_chat|2|发送成功";
+            en_resp(ok_msg, clint_fd);
+        } else {
+            char msg[] = "group_chat|0|群组不存在或无成员";
+            en_resp(msg, clint_fd);
+        }
+    }
+    else if(strcmp(cmd,"update_profile")==0 || strcmp(cmd,"get_profile")==0){
+        char msg[]="error|0|该版本已移除头像功能";
+        en_resp(msg, clint_fd);
+    }
     else if(strcmp(cmd,"show_history")==0){
         pthread_mutex_lock(&client_map_mutex);
         auto it_name = clint_fdtoname.find(clint_fd);
@@ -821,42 +1295,94 @@ void process_clint_data(Task&task){
             // pool.en_conn(conn);
             return;
         }
-        
-        // 优化：分页查询，每次只查最近的 50 条
-        // 客户端可以通过传递参数 offset 来获取更多历史记录，目前默认只返回最近的。
-        // 防止数据量过大导致内存溢出或 buf 越界。
-        string sql=
-            "select ru.user_name as sender, u.user_name as receiver, "
-            "send_time, group_type, content "
-            "from chat_log c "
-            "join user u on c.receiver_id = u.user_id "
-            "join user ru on ru.user_id = c.sender_id "
-            "where u.user_name = '" + username + "' "
-            "or ru.user_name = '" + username + "' "
-            "order by send_time desc limit 50";
-            
+
+        char* scope = strtok_r(NULL, "|", &saveptr); // broadcast|private|group (optional)
+        char* arg   = strtok_r(NULL, "|", &saveptr); // friend_name or conv_id (optional)
+        string safe_username = escape_sql(username);
+        string sql;
         string ret="";
+        string uid_str = to_string(conn->get_id(username.c_str()));
+
+        if(scope && (strcmp(scope,"broadcast")==0)){
+            sql =
+                "select ru.user_name as sender, u.user_name as receiver, "
+                "send_time, group_type, ifnull(conversation_id, 0), content "
+                "from chat_log c "
+                "join user u on c.receiver_id = u.user_id "
+                "join user ru on ru.user_id = c.sender_id "
+                "where (u.user_name = '" + safe_username + "' or ru.user_name = '" + safe_username + "') "
+                "and c.group_type='broadcast' "
+                "order by send_time desc limit 50";
+        } else if(scope && (strcmp(scope,"private")==0 || strcmp(scope,"single")==0)){
+            if(arg && strlen(arg)>0){
+                string friend_name = escape_sql(string(arg));
+                string fid_str = to_string(conn->get_id(friend_name.c_str()));
+                sql =
+                    "select ru.user_name as sender, u.user_name as receiver, "
+                    "send_time, group_type, ifnull(conversation_id, 0), content "
+                    "from chat_log c "
+                    "join user u on c.receiver_id = u.user_id "
+                    "join user ru on ru.user_id = c.sender_id "
+                    "where ((c.sender_id=" + uid_str + " and c.receiver_id=" + fid_str + ") "
+                    "or (c.sender_id=" + fid_str + " and c.receiver_id=" + uid_str + ")) "
+                    "and c.group_type='single' "
+                    "order by send_time desc limit 50";
+            } else {
+                sql =
+                    "select ru.user_name as sender, u.user_name as receiver, "
+                    "send_time, group_type, ifnull(conversation_id, 0), content "
+                    "from chat_log c "
+                    "join user u on c.receiver_id = u.user_id "
+                    "join user ru on ru.user_id = c.sender_id "
+                    "where (u.user_name = '" + safe_username + "' or ru.user_name = '" + safe_username + "') "
+                    "and c.group_type='single' "
+                    "order by send_time desc limit 50";
+            }
+        } else if(scope && (strcmp(scope,"group")==0 || strcmp(scope,"multi")==0)){
+            if(arg && strlen(arg)>0){
+                string conv = escape_sql(string(arg));
+                sql =
+                    "select ru.user_name as sender, u.user_name as receiver, "
+                    "send_time, group_type, ifnull(conversation_id, 0), content "
+                    "from chat_log c "
+                    "join user u on c.receiver_id = u.user_id "
+                    "join user ru on ru.user_id = c.sender_id "
+                    "where c.group_type='multi' and c.conversation_id=" + conv + " "
+                    "order by send_time desc limit 50";
+            } else {
+                sql =
+                    "select ru.user_name as sender, u.user_name as receiver, "
+                    "send_time, group_type, ifnull(conversation_id, 0), content "
+                    "from chat_log c "
+                    "join user u on c.receiver_id = u.user_id "
+                    "join user ru on ru.user_id = c.sender_id "
+                    "where (u.user_name = '" + safe_username + "' or ru.user_name = '" + safe_username + "') "
+                    "and c.group_type='multi' "
+                    "order by send_time desc limit 50";
+            }
+        } else {
+            sql=
+                "select ru.user_name as sender, u.user_name as receiver, "
+                "send_time, group_type, ifnull(conversation_id, 0), content "
+                "from chat_log c "
+                "join user u on c.receiver_id = u.user_id "
+                "join user ru on ru.user_id = c.sender_id "
+                "where (u.user_name = '" + safe_username + "' "
+                "or ru.user_name = '" + safe_username + "') "
+                "order by send_time desc limit 50";
+        }
+
         conn->select_many_SQL(sql,ret);
-        
-        // 注意：ret 可能很大，但由于加了 limit 50，通常不会超过 BUF_SIZE (4096)。
-        // 如果一条消息很长，50条也可能超。
-        // 更健壮的做法是循环分包发送。
-        
         if (ret.length() > BUF_SIZE - 100) {
-             // 简单截断或者分包逻辑（这里先做简单的长度保护）
              LOG_WARN("History data too large, truncating...");
              ret = ret.substr(0, BUF_SIZE - 100);
         }
-
         char msg[BUF_SIZE];
-        // 使用 snprintf 时要注意 ret 的长度
         int written = snprintf(msg, BUF_SIZE-1, "show_history|1|%s", ret.c_str());
-        if (written >= BUF_SIZE-1) {
-             msg[BUF_SIZE-1] = 0; // 确保截断后有结束符
-        }
+        if (written >= BUF_SIZE-1) { msg[BUF_SIZE-1] = 0; }
         en_resp(msg,clint_fd);
     }
-    else if(strcmp(cmd,"q\n")==0||strcmp(cmd,"Q\n")==0){
+    else if(strcmp(cmd,"q")==0||strcmp(cmd,"Q")==0){
         //更新status
         pthread_mutex_lock(&client_map_mutex);
         auto it_name = clint_fdtoname.find(clint_fd);
@@ -890,6 +1416,8 @@ void process_clint_data(Task&task){
         string username = (it_name != clint_fdtoname.end()) ? it_name->second : "";
         pthread_mutex_unlock(&client_map_mutex);
         if(username.empty()){
+            // 对于未登录用户也应该刷新超时时间，因为可能正在注册/登录过程中
+            update_expire(clint_fd);
             char msg[]="heartbeat|0|未登录";
             en_resp(msg,clint_fd);
             // pool.en_conn(conn);
@@ -899,6 +1427,7 @@ void process_clint_data(Task&task){
         string sql="update user_status set last_active = NOW() where user_id ="+to_string(user_id);
         DbHandle::getInstance()->add_task(sql);
         char msg[]="heartbeat|1|ok";
+        update_expire(clint_fd);
         en_resp(msg,clint_fd);
     }
     // ✓ 不需要手动调用 en_conn()，守卫析构时自动调用
@@ -931,49 +1460,7 @@ void handle_response(){
         }
     }
 }
-void* check_timeout_thread(void* arg) {
-    Config* conf = Config::getInstance();
-    MyDb con;
-    con.initDB(conf->getString("mysql_host", "127.0.0.1"), 
-               conf->getString("mysql_user", "ftpuser"), 
-               conf->getString("mysql_password", "926472"), 
-               conf->getString("mysql_dbname", "Chatroom"), 
-               conf->getInt("mysql_port", 3306));
-    while (1) {
-        sleep(10);
-        string ret;
-        // 优化超时检查: 40秒无心跳则判定超时（留有缓冲时间）
-        // C++客户端心跳间隔: 15秒
-        // Python客户端心跳间隔: 18秒
-        // 40秒足够检测到真正掉线的客户端，并给正常客户端足够的缓冲时间
-        con.select_many_SQL(
-            "select user_id from user_status "
-            "where is_online=1 and last_active < NOW() - INTERVAL 40 SECOND",
-            ret
-        );
-        if (ret.empty()) continue;
-        char* buf = strdup(ret.c_str());
-        char* saveptr_to = NULL;
-        char* user_id = strtok_r(buf, "\n", &saveptr_to);
-        while (user_id) {
-            int uid = atoi(user_id);
-            string update ="update user_status set is_online=0 where user_id="+to_string(uid);
-            DbHandle::getInstance()->add_task(update);
-            string name = con.get_name(uid);
-            pthread_mutex_lock(&client_map_mutex);
-            auto it_fd = clint_nametofd.find(name);
-            int to_fd = (it_fd != clint_nametofd.end()) ? it_fd->second : -1;
-            pthread_mutex_unlock(&client_map_mutex);
-            if (to_fd != -1) {
-                char msg[]="bye\n";
-                en_resp(msg,to_fd);
-            }
-            user_id = strtok_r(NULL, "\n", &saveptr_to);
-        }
-        free(buf);
-    }
-    return nullptr;
-}
+
 void handleRedisSubscribeMessage(int channel, const string& message)
 {
     // 收到订阅消息后只入队到线程池，由工作线程处理 DB 更新和下发，以避免阻塞订阅线程
@@ -984,6 +1471,40 @@ void handleRedisSubscribeMessage(int channel, const string& message)
     task.message = message; // 包含 message_id 的完整 payload
     pool.addTask(task);
 }
+bool is_valid(int fd,time_t expire){
+    pthread_mutex_lock(&timer_mutex);
+    auto it = latest_expire.find(fd);
+    bool valid = (it != latest_expire.end() && it->second == expire);
+    pthread_mutex_unlock(&timer_mutex);
+    return valid;
+}
+
+void check_timeout(){
+    time_t now=time(NULL);
+    while(true){
+        Timer t;
+        {
+            pthread_mutex_lock(&timer_mutex);
+            if(hp.empty()){
+                pthread_mutex_unlock(&timer_mutex);
+                break;
+            }
+            t = hp.top();
+            if(t.expire > now){
+                pthread_mutex_unlock(&timer_mutex);
+                break;
+            }
+            hp.pop();
+            pthread_mutex_unlock(&timer_mutex);
+        }
+        
+        //懒删除，检测是否有效
+        if(is_valid(t.fd,t.expire)){
+            close_clint(epoll_fd,t.fd);
+        }
+    }
+}
+
 
 int main(int argc,char*argv[]){
     // 1. 加载配置文件
@@ -1059,6 +1580,22 @@ int main(int argc,char*argv[]){
         return 1;
     }
 
+    // Ensure chat_log has conversation_id for group chat history (idempotent)
+    {
+        string col_count;
+        bool ok = g_close_conn.select_one_SQL(
+            "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='chat_log' AND COLUMN_NAME='conversation_id'",
+            col_count
+        );
+        if (ok) {
+            int count = atoi(col_count.c_str());
+            if (count == 0) {
+                g_close_conn.exeSQL("ALTER TABLE chat_log ADD COLUMN conversation_id INT DEFAULT NULL;");
+            }
+        }
+    }
+
     // 启动异步数据库写入线程
     DbHandle::getInstance()->start();
 
@@ -1074,22 +1611,16 @@ int main(int argc,char*argv[]){
     ParserPool::getInstance()->init(parser_threads, &client_buffers, &buffer_map_mutex, &pool);
     ParserPool::getInstance()->start();
 
-    // 启动心跳检测线程
-    pthread_t timeout_tid;
-    if(pthread_create(&timeout_tid, NULL, check_timeout_thread, NULL) != 0){
-        perror("Failed to create timeout thread");
-        exit(0);
-    }
     ser_fd=server_init();
     if(set_unblocking(ser_fd)==0){
         close(ser_fd);
-        exit(0);
+        exit(EXIT_FAILURE);
     }
     struct epoll_event event,events[MAX_EVENTS];
     epoll_fd=epoll_create(1);
     if(epoll_fd==-1){
         LOG_FATAL("Epoll create failed",ERR_EPOLL_CREATE_FAIL);
-        exit(0);
+        exit(EXIT_FAILURE);
     }
     event.events=EPOLLIN|EPOLLET|EPOLLRDHUP;
     event.data.fd=ser_fd;
@@ -1097,9 +1628,9 @@ int main(int argc,char*argv[]){
         LOG_FATAL("Epoll_ctl add server socket failed",ERR_EPOLL_CTL_FAIL);
         close(epoll_fd);
         close(ser_fd);
-        close(event_fd);
-        exit(0);
+        exit(EXIT_FAILURE);
     }
+    event_fd=eventfd(0,EFD_NONBLOCK);
     event.events=EPOLLIN;
     event.data.fd=event_fd;
     if(epoll_ctl(epoll_fd,EPOLL_CTL_ADD,event_fd,&event)==-1){
@@ -1107,8 +1638,40 @@ int main(int argc,char*argv[]){
         close(epoll_fd);
         close(ser_fd);
         close(event_fd);
-        exit(0);
+        exit(EXIT_FAILURE);
     }
+    // 定时器
+    tfd = timerfd_create(CLOCK_MONOTONIC, 0);
+    if (tfd == -1) {
+        LOG_FATAL("timerfd_create failed", ERR_EPOLL_CREATE_FAIL);
+        close(epoll_fd);
+        close(ser_fd);
+        close(event_fd);
+        exit(EXIT_FAILURE);
+    }
+    struct itimerspec value;
+    value.it_value.tv_sec = 10;
+    value.it_value.tv_nsec = 0;
+    value.it_interval = value.it_value;
+    if (timerfd_settime(tfd, 0, &value, NULL) == -1) {
+        LOG_FATAL("timerfd_settime failed", ERR_EPOLL_CTL_FAIL);
+        close(epoll_fd);
+        close(ser_fd);
+        close(event_fd);
+        close(tfd);
+        exit(EXIT_FAILURE);
+    }
+    event.data.fd = tfd;
+    event.events = EPOLLIN;
+    if(epoll_ctl(epoll_fd,EPOLL_CTL_ADD,tfd,&event)==-1){
+        LOG_FATAL("Epoll_ctl add timerfd failed",ERR_EPOLL_CTL_FAIL);
+        close(epoll_fd);
+        close(ser_fd);
+        close(event_fd);
+        close(tfd);
+        exit(EXIT_FAILURE);
+    }
+
     LOG_INFO("Epoll server started successfully, waiting for connections...");
     int i;
     while(1){
@@ -1134,6 +1697,12 @@ int main(int argc,char*argv[]){
             }
             else if(fd==event_fd){
                 handle_response();
+            }
+            else if(fd==tfd){
+                //心跳检测
+                uint64_t exp;
+                read(tfd,&exp,sizeof(exp));
+                check_timeout();
             }
             else{
                 if(ev&EPOLLIN){//客户端有消息发送

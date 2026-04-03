@@ -30,6 +30,14 @@
 
 struct Task;
 
+struct Timer{
+    int fd;  //连接
+    time_t expire;  //过期时间
+    bool operator>(const Timer&other)const{
+        return expire>other.expire;
+    }
+};
+
 struct Response{
     int fd;
     string out;

@@ -37,7 +37,6 @@ public:
         init();
     }
 
-    // Full constructor for fine-grained control
     ThreadAndConnectionPool(int minThreads, int maxThreads, int minConns, int maxConns, 
                           std::chrono::milliseconds idleTimeout, int scaleFactor)
         : minThreads_(minThreads), maxThreads_(maxThreads),
@@ -228,7 +227,6 @@ private:
             int curThreads = threadCount_.load();
             int idleThreads = idleThreadCount_.load();
 
-            // Scale up logic
             int effectiveBacklog = backlog - idleThreads;
             if (effectiveBacklog > 0 && curThreads < maxThreads_) {
                 int needed = effectiveBacklog / scaleFactor_ + 1;
@@ -237,17 +235,14 @@ private:
                 for (int i = 0; i < toAdd; i++) addThread();
             }
 
-            // --- Manage Connections ---
             {
                 std::lock_guard<std::mutex> lock(connMutex_);
                 int idleConns = conns_.size();
                 int curConns = connectionCount_.load();
                 
-                // If we have significantly more idle connections than minConns
+    
                 if (idleConns > minConns_ && curConns > minConns_) {
-                    // Only remove if idle count is high (e.g., > 50% of current)
                     if (idleConns > curConns / 2) { 
-                         // unique_ptr automatically deletes object when popped
                          conns_.pop();
                          connectionCount_--;
                     }

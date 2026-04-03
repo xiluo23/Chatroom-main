@@ -3,47 +3,76 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chatroom Web Client</title>
+    <title>Chatroom Web Client - Pro</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 1000px; margin: 0 auto; padding: 20px; background-color: #f0f2f5; height: 90vh; display: flex; flex-direction: column; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 1100px; margin: 0 auto; padding: 20px; background-color: #f0f2f5; height: 95vh; display: flex; flex-direction: column; }
         h2 { color: #333; text-align: center; margin-bottom: 10px; }
         
         /* Layout */
         .main-container { display: flex; flex: 1; gap: 20px; min-height: 0; }
-        .sidebar { width: 250px; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); display: flex; flex-direction: column; padding: 15px; }
+        .sidebar { width: 300px; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); display: flex; flex-direction: column; overflow: hidden; }
         .chat-area { flex: 1; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); display: flex; flex-direction: column; padding: 15px; }
         
-        /* Components */
-        #chat-box { flex: 1; overflow-y: auto; margin-bottom: 15px; padding: 10px; border: 1px solid #eee; border-radius: 4px; background: #fafafa; }
-        .message { margin-bottom: 8px; padding: 8px 12px; border-radius: 12px; max-width: 80%; word-wrap: break-word; font-size: 14px; line-height: 1.4; }
-        .message.system { color: #666; font-style: italic; background-color: #e9ecef; font-size: 0.85em; max-width: 100%; text-align: center; }
-        .message.self { background-color: #007bff; color: white; align-self: flex-end; margin-left: auto; }
-        .message.other { background-color: #e9ecef; color: #333; align-self: flex-start; }
-        .message.private { border: 2px solid #ffc107; }
-        .message.multi { border: 2px solid #17a2b8; }
-        .message-meta { font-size: 0.75em; opacity: 0.8; margin-bottom: 2px; display: block; }
+        /* Tabs */
+        .tab-close { margin-left: 6px;color: #999;cursor: pointer;font-weight: bold;}
+
+        .tab-close:hover {color: red;}
+        .tabs { display: flex; background: #f8f9fa; border-bottom: 1px solid #eee; }
+        .tab { flex: 1; padding: 12px; text-align: center; cursor: pointer; font-size: 14px; color: #666; transition: all 0.2s; }
+        .tab.active { background: white; color: #007bff; font-weight: bold; border-bottom: 2px solid #007bff; }
+        .tab.unread { position: relative; color: red; font-weight: bold; }
+        .tab.unread::after { content: ''; position: absolute; top: 10px; right: 20px; width: 8px; height: 8px; background: red; border-radius: 50%; }
         
-        .user-list { flex: 1; overflow-y: auto; list-style: none; padding: 0; margin: 10px 0; }
-        .user-item { padding: 8px; border-bottom: 1px solid #eee; cursor: pointer; border-radius: 4px; display: flex; align-items: center; justify-content: space-between; }
+        /* Sidebar Lists */
+        .list-container { flex: 1; overflow-y: auto; padding: 10px; }
+        .user-list { list-style: none; padding: 0; margin: 0; }
+        .user-item { padding: 10px; border-bottom: 1px solid #f0f0f0; cursor: pointer; border-radius: 4px; display: flex; align-items: center; justify-content: space-between; font-size: 14px; }
         .user-item:hover { background-color: #f8f9fa; }
         .user-item.active { background-color: #e7f1ff; color: #007bff; font-weight: bold; }
-        .user-item.broadcast { font-weight: bold; color: #28a745; }
+        .user-item .actions { display: none; }
+        .user-item:hover .actions { display: flex; gap: 5px; }
         
-        /* Checkbox style for multi-select */
-        .user-select-check {
-            width: 18px; height: 18px; margin-right: 10px; cursor: pointer;
-        }
-
+        /* Components */
+        /* Sidebar Footer Avatar */
+        .sidebar-profile { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+        .avatar-circle { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: #ddd; border: 1px solid #eee; }
+        .avatar-preview { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; background: #f8f9fa; border: 2px solid #007bff; display: block; margin: 0 auto 10px; }
+        
+        .chat-box { flex: 1; overflow-y: auto; margin-bottom: 15px; padding: 10px; border: 1px solid #eee; border-radius: 4px; background: #fafafa; }
+        .conv-tabs { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; }
+        .conv-tab { padding: 6px 10px; background: #e9ecef; border-radius: 12px; cursor: pointer; font-size: 13px; }
+        .conv-tab.active { background: #007bff; color: #fff; }
+        .conv-tab.unread { position: relative; font-weight: bold; }
+        .conv-tab.unread::after { content: ''; position: absolute; top: -2px; right: -2px; width: 8px; height: 8px; background: red; border-radius: 50%; }
+        .conv-pane { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+        .conv-view { flex: 1; min-height: 0; overflow: hidden; }
+        .conv-track { height: 100%; display: flex; transition: transform 0.18s ease; will-change: transform; }
+        .conv-slide { flex: 0 0 100%; width: 100%; height: 100%; margin-bottom: 0; }
+        .message { margin-bottom: 8px; padding: 8px 12px; border-radius: 12px; max-width: 85%; word-wrap: break-word; font-size: 14px; line-height: 1.4; }
+        .message.system { color: #666; font-style: italic; background-color: #e9ecef; font-size: 0.85em; max-width: 100%; text-align: center; border-radius: 4px; }
+        .message.self { background-color: #007bff; color: white; align-self: flex-end; margin-left: auto; border-bottom-right-radius: 2px; }
+        .message.other { background-color: #e9ecef; color: #333; align-self: flex-start; border-bottom-left-radius: 2px; }
+        .message.private { border-left: 4px solid #ffc107; }
+        .message.group { border-left: 4px solid #17a2b8; }
+        .message-meta { font-size: 0.75em; opacity: 0.8; margin-bottom: 2px; display: block; }
+        
         .controls { display: flex; gap: 10px; margin-top: 10px; }
-        input[type="text"], input[type="password"] { flex-grow: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px; outline: none; }
-        input[type="text"]:focus { border-color: #007bff; }
+        input[type="text"], input[type="password"], textarea { flex-grow: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px; outline: none; font-size: 14px; }
+        input:focus, textarea:focus { border-color: #007bff; }
         
-        button { padding: 10px 20px; cursor: pointer; background-color: #007bff; color: white; border: none; border-radius: 4px; transition: background 0.2s; white-space: nowrap; }
+        button { padding: 8px 15px; cursor: pointer; background-color: #007bff; color: white; border: none; border-radius: 4px; transition: background 0.2s; white-space: nowrap; font-size: 14px; }
         button:hover { background-color: #0056b3; }
-        button:disabled { background-color: #ccc; cursor: not-allowed; }
         button.secondary { background-color: #6c757d; }
-        button.danger { background-color: #dc3545; }
         button.success { background-color: #28a745; }
+        button.danger { background-color: #dc3545; }
+        button.small { padding: 4px 8px; font-size: 12px; }
+        
+        /* Profile Modal */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+        .modal { background: white; padding: 25px; border-radius: 8px; width: 400px; box-shadow: 0 5px 20px rgba(0,0,0,0.2); }
+        .modal h3 { margin-top: 0; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-size: 13px; color: #666; }
         
         #auth-screen { max-width: 400px; margin: 50px auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
         .hidden { display: none !important; }
@@ -53,22 +82,22 @@
     </style>
 </head>
 <body>
-    <h2>Chatroom Web Client</h2>
+    <h2>Chatroom Pro</h2>
     
-    <!-- Connection / Auth Screen -->
+    <!-- Auth Screen -->
     <div id="auth-screen">
         <div id="connection-status" style="text-align: center; margin-bottom: 20px; color: #666;">
             状态: <span id="status-text">未连接</span>
         </div>
         
         <div id="auth-forms" class="hidden">
+            <div class="form-group">
+                <input type="text" id="username" placeholder="用户名" style="width: 100%; box-sizing: border-box;">
+            </div>
+            <div class="form-group">
+                <input type="password" id="password" placeholder="密码" style="width: 100%; box-sizing: border-box;">
+            </div>
             <div class="controls">
-                <input type="text" id="username" placeholder="用户名">
-            </div>
-            <div class="controls" style="margin-top: 10px;">
-                <input type="password" id="password" placeholder="密码">
-            </div>
-            <div class="controls" style="margin-top: 20px;">
                 <button onclick="doLogin()" style="flex: 1;">登录</button>
                 <button onclick="doRegister()" class="success" style="flex: 1;">注册</button>
             </div>
@@ -81,35 +110,98 @@
 
     <!-- Main Chat Screen -->
     <div id="chat-screen" class="main-container hidden">
-        <!-- Sidebar: User List -->
         <div class="sidebar">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <strong>在线用户</strong>
-                <div>
-                    <button onclick="send('show_history')" style="padding: 4px 8px; font-size: 12px; margin-right: 5px;" class="secondary">历史</button>
-                    <button onclick="send('show_online_user')" style="padding: 4px 8px; font-size: 12px;" class="secondary">刷新</button>
+            <div class="tabs">
+                <div class="tab active" onclick="switchTab('online')">在线</div>
+                <div class="tab" onclick="switchTab('friends')">好友</div>
+                <div class="tab" onclick="switchTab('groups')">群组</div>
+            </div>
+            
+            <div class="list-container">
+                <!-- Online List -->
+                <div id="online-panel">
+                    <div style="display: flex; justify-content: space-between; padding: 5px;">
+                        <small>在线用户</small>
+                        <button onclick="send('show_online_user')" class="small secondary">刷新</button>
+                    </div>
+                    <ul class="user-list" id="online-user-list">
+                        <li class="user-item active" onclick="selectBroadcast()">
+                            <span>📢 所有人 (广播)</span>
+                        </li>
+                    </ul>
+                </div>
+                
+                <!-- Friends List -->
+                <div id="friends-panel" class="hidden">
+                    <div style="display: flex; justify-content: space-between; padding: 5px;">
+                        <small>我的好友</small>
+                        <button onclick="send('show_friends')" class="small secondary">刷新</button>
+                    </div>
+                    <ul class="user-list" id="friend-list"></ul>
+                    <div class="controls" style="padding: 5px;">
+                        <input type="text" id="add-friend-input" placeholder="输入好友名" class="small">
+                        <button onclick="addFriend()" class="small success">添加</button>
+                    </div>
+                </div>
+                
+                <!-- Groups List -->
+                <div id="groups-panel" class="hidden">
+                    <div style="display: flex; justify-content: space-between; padding: 5px;">
+                        <small>我的群组</small>
+                        <button onclick="refreshGroups()" class="small secondary">刷新</button>
+                    </div>
+                    <ul class="user-list" id="group-list"></ul>
+                    <div class="controls" style="flex-direction: column; padding: 5px;">
+                        <div class="controls">
+                            <input type="text" id="group-name-input" placeholder="群组名称" class="small">
+                            <button onclick="createGroup()" class="small success">创建</button>
+                        </div>
+                        <div class="controls">
+                            <input type="text" id="group-id-input" placeholder="群组ID" class="small">
+                            <button onclick="joinGroup()" class="small secondary">加入</button>
+                        </div>
+                        <div class="controls">
+                            <input type="text" id="group-invite-input" placeholder="好友用户名" class="small">
+                            <button onclick="inviteGroup()" class="small success">邀请</button>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <ul class="user-list" id="user-list">
-                <li class="user-item broadcast active" onclick="selectTarget(null)">
-                    <span>📢 群发广播 (所有人)</span>
-                </li>
-                <!-- Users will be populated here -->
-            </ul>
-            <div style="margin-top: auto; border-top: 1px solid #eee; padding-top: 10px;">
-                <div style="margin-bottom: 5px;">当前用户: <strong id="current-user-display">-</strong></div>
-                <button onclick="logout()" class="danger" style="width: 100%;">退出登录</button>
+
+            <div style="padding: 15px; border-top: 1px solid #eee; background: #fafafa;">
+                <div>用户: <strong id="current-user-display">-</strong></div>
+                <div class="controls">
+                    <button onclick="sendHistory()" class="small secondary" style="flex: 1;">历史消息</button>
+                    <button onclick="logout()" class="small danger" style="flex: 1;">退出</button>
+                </div>
             </div>
         </div>
 
-        <!-- Chat Area -->
         <div class="chat-area">
-            <div id="chat-box"></div>
-            
+            <div id="chat-box-broadcast" class="chat-box"></div>
+            <div id="private-pane" class="hidden conv-pane">
+                <div id="private-tabs" class="conv-tabs"></div>
+                <div id="private-view" class="conv-view">
+                    <div id="private-track" class="conv-track">
+                 <div id="private-empty-box" class="chat-box conv-slide">
+                <div class="message system">请选择一个好友开始聊天</div>
+                    </div>
+                </div>
+            </div>
+            </div>
+            <div id="group-pane" class="hidden conv-pane">
+                <div id="group-tabs" class="conv-tabs"></div>
+                <div id="group-view" class="conv-view">
+                    <div id="group-track" class="conv-track">
+                    <div id="group-empty-box" class="chat-box conv-slide">
+                    <div class="message system">请选择一个群组开始聊天</div>
+                    </div>
+                    </div>
+                </div>
+            </div>
             <div class="target-indicator">
                 发送给: <span id="target-display">所有人</span>
             </div>
-            
             <div class="controls">
                 <input type="text" id="message-input" placeholder="输入消息..." onkeypress="handleKeyPress(event)">
                 <button onclick="sendMessage()">发送</button>
@@ -120,23 +212,26 @@
     <script>
         let ws;
         let currentUser = "";
-        let selectedUsers = new Set(); // Stores usernames. Empty means broadcast/none depending on context, but let's be explicit.
-        let isBroadcast = true; // Default to broadcast
+        let selectedTarget = { type: 'broadcast', id: null, name: '所有人' };
         let heartbeatInterval = null;
-        
+        let currentModule = 'broadcast'; // broadcast | private | group
+        let pendingHistoryBoxId = null;
+        const privateConversations = {}; // key: username -> { boxId, tabEl }
+        const privateOrder = [];
+        let activePrivate = null;
+        const groupConversations = {};   // key: groupId -> { boxId, tabEl }
+        const groupOrder = [];
+        let activeGroup = null;
+        const groupNames = {}; // key: groupId -> groupName
+
         function connect() {
             const btn = document.getElementById('btn-connect');
             const status = document.getElementById('status-text');
-            
             status.innerText = "连接中...";
-            status.style.color = "orange";
             btn.disabled = true;
 
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const host = window.location.host;
-            const wsUrl = `${protocol}//${host}`;
-            
-            console.log("Connecting to:", wsUrl);
+            const wsUrl = `${protocol}//${window.location.host}`;
             ws = new WebSocket(wsUrl);
 
             ws.onopen = () => {
@@ -145,341 +240,666 @@
                 document.getElementById('connect-btn-container').classList.add('hidden');
                 document.getElementById('auth-forms').classList.remove('hidden');
                 appendSystemMessage("已连接到服务器");
+                startHeartbeat();
             };
 
-            ws.onmessage = (event) => {
-                const msg = event.data;
-                console.log("RX:", msg);
-                parseMessage(msg);
-            };
-
+            ws.onmessage = (event) => parseMessage(event.data);
             ws.onclose = () => {
                 status.innerText = "已断开";
                 status.style.color = "red";
                 stopHeartbeat();
                 resetUI();
             };
-            
-            ws.onerror = (err) => {
-                status.innerText = "连接错误";
-                status.style.color = "red";
-                btn.disabled = false;
-            };
         }
 
-        function resetUI() {
-            document.getElementById('auth-screen').classList.remove('hidden');
-            document.getElementById('chat-screen').classList.add('hidden');
-            document.getElementById('connect-btn-container').classList.remove('hidden');
-            document.getElementById('auth-forms').classList.add('hidden');
-            document.getElementById('btn-connect').disabled = false;
-            document.getElementById('chat-box').innerHTML = '';
-            currentUser = "";
+        function handleDeleteFriend(user) {
+
+            // ===== 1. 删除会话 =====
+            if (privateConversations[user]) {
+            
+                const { boxId, tabEl } = privateConversations[user];
+            
+                // 删除聊天框
+                const box = document.getElementById(boxId);
+                if (box) box.remove();
+            
+                // 删除tab
+                if (tabEl) tabEl.remove();
+            
+                delete privateConversations[user];
+            
+                const idx = privateOrder.indexOf(user);
+                if (idx !== -1) privateOrder.splice(idx, 1);
+            }
+        
+            // ===== 2. 如果当前正在聊天 =====
+            if (activePrivate === user) {
+                activePrivate = null;
+            
+                // 👉 切回空界面
+                const track = document.getElementById('private-track');
+                track.style.transform = `translateX(0%)`;
+            
+                document.getElementById('target-display').innerText = '请选择好友';
+            }
+        
+            // ===== 3. 刷新好友列表 =====
+            send('show_friends');
+        
+            // ===== 4. 清理顶部红点 =====
+            clearTopUnreadIfNeeded('private');
+
+            updateTargetUI();
         }
 
         function parseMessage(msg) {
-            // Protocol: cmd|code|payload
-            // Some payloads might contain | so we limit split
+            console.log("RX:", msg);
             const firstPipe = msg.indexOf('|');
-            if (firstPipe === -1) { appendMessage("Unknown", msg, "system"); return; }
-            
+            if (firstPipe === -1) return;
+
             const cmd = msg.substring(0, firstPipe);
             const rest = msg.substring(firstPipe + 1);
-            
             const secondPipe = rest.indexOf('|');
-            let code, payload;
-            
-            if (secondPipe === -1) {
-                code = rest;
-                payload = "";
-            } else {
-                code = rest.substring(0, secondPipe);
-                payload = rest.substring(secondPipe + 1);
-            }
+            const code = secondPipe === -1 ? rest : rest.substring(0, secondPipe);
+            const payload = secondPipe === -1 ? "" : rest.substring(secondPipe + 1);
 
-            // Handle Commands
-            if (cmd === 'sign_in') {
-                if (code === '1') {
-                    currentUser = document.getElementById('username').value;
-                    document.getElementById('current-user-display').innerText = currentUser;
-                    document.getElementById('auth-screen').classList.add('hidden');
-                    document.getElementById('chat-screen').classList.remove('hidden');
-                    appendSystemMessage("登录成功");
-                    startHeartbeat();
-                    send('show_online_user'); // Auto refresh list
-                } else {
-                    alert("登录失败: " + payload);
+            switch(cmd) {
+                case 'sign_in':
+                    if (code === '1') {
+                        currentUser = document.getElementById('username').value;
+                        document.getElementById('current-user-display').innerText = currentUser;
+                        document.getElementById('auth-screen').classList.add('hidden');
+                        document.getElementById('chat-screen').classList.remove('hidden');
+                        send('show_online_user');
+                    } else alert("登录失败: " + payload);
+                    break;
+                case 'sign_up':
+                    alert(code === '1' ? "注册成功" : "注册失败: " + payload);
+                    break;
+                case 'show_online_user':
+                    if (code === '1') updateOnlineList(payload);
+                    break;
+                case 'show_friends':
+                    if (code === '1') updateFriendList(payload);
+                    break;
+                case 'show_groups':
+                    if (code === '1') updateGroupList(payload);
+                    break;
+                case 'invite_group':
+                    alert(payload);
+                    if (code === '1') refreshGroups();
+                    break;
+                case 'group_invite':
+                    handleGroupInvite(code, payload);
+                    break;
+                case 'friend_request':
+                    appendFriendRequest(payload);
+                    break;
+                case 'add_friend':
+                    alert(payload);
+                    break;
+                case 'handle_friend':
+                    alert(payload);
+                    if (code === '1') send('show_friends');
+                    break;
+                case 'create_group':
+                case 'join_group':
+                case 'quit_group':
+                    alert(payload);
+                    if (code === '1') send('show_groups');
+                    break;
+                case 'show_group_members':
+                    alert("群成员:\n" + payload);
+                    break;
+                case 'single_chat':
+                case 'multi_chat':
+                case 'broadcast_chat':
+                    handleChatMessage(cmd, code, payload);
+                    break;
+                case 'group_chat':
+                    handleGroupMessage(code, payload);
+                    break;
+                case 'show_history':
+                    if (code === '1') handleHistory(payload);
+                    break;
+                case 'chat_unread':
+                    handleUnreadMessages(payload);
+                    break;
+                case 'delete_friend':
+                alert(payload);
+
+                if (code === '1'&&deletingFriend) {
+                    handleDeleteFriend(deletingFriend);
+                    deletingFriend = null;
                 }
-            } else if (cmd === 'sign_up') {
-                if (code === '1') alert("注册成功，请登录");
-                else alert("注册失败: " + payload);
-            } else if (cmd === 'show_online_user') {
-                if (code === '1') updateUserList(payload);
-            } else if (cmd === 'broadcast_chat') {
-                if (code === '2') {
-                    // Sent success confirmation
-                    // Don't need to do much, maybe show own message if not handled locally
-                } else if (code === '1') {
-                    // Incoming broadcast: sender;content
-                    // Note: payload might contain ; in content, so split by first ;
-                    const sepIndex = payload.indexOf(';');
-                    if (sepIndex !== -1) {
-                        const sender = payload.substring(0, sepIndex);
-                        const content = payload.substring(sepIndex + 1);
-                        appendMessage(sender, content, "other", "Broadcast");
-                    }
-                }
-            } else if (cmd === 'single_chat') {
-                if (code === '2') {
-                    // Sent success
-                } else if (code === '1') {
-                    // Incoming private: sender;content
-                    const sepIndex = payload.indexOf(';');
-                    if (sepIndex !== -1) {
-                        const sender = payload.substring(0, sepIndex);
-                        const content = payload.substring(sepIndex + 1);
-                        appendMessage(sender, content, "other", "Private");
-                    }
-                }
-            } else if (cmd === 'multi_chat') {
-                 if (code === '2') {
-                    const sepIndex = payload.indexOf(';');
-                    if (sepIndex !== -1) {
-                        const sender = payload.substring(0, sepIndex);
-                        const content = payload.substring(sepIndex + 1);
-                        appendMessage(sender, content, "other", "Multi");
-                    }
-                 }
-            } else if (cmd === 'show_history') {
-                if (code === '1') {
-                    // Payload: Sender Receiver Date Time GroupType Content\n...
-                    // Server returns newest first (DESC limit 50).
-                    const lines = payload.split('\n');
-                    const seen = new Set();
-                    const uniqueMsgs = [];
-
-                    lines.forEach(line => {
-                        line = line.trim();
-                        if (!line) return;
-                        
-                        const parts = line.split(' ');
-                        if (parts.length >= 6) {
-                            const sender = parts[0];
-                            const receiver = parts[1];
-                            const date = parts[2];
-                            const time = parts[3];
-                            const type = parts[4];
-                            const content = parts.slice(5).join(' ');
-                            
-                            // Deduplicate broadcast fan-out
-                            let key = "";
-                            if (type === 'broadcast') {
-                                key = `broadcast|${sender}|${date}|${time}|${content}`;
-                            } else {
-                                key = `single|${sender}|${receiver}|${date}|${time}|${content}`;
-                            }
-
-                            if (!seen.has(key)) {
-                                seen.add(key);
-                                uniqueMsgs.push({sender, receiver, date, time, type, content});
-                            }
-                        }
-                    });
-
-                    // Reverse to show oldest first
-                    uniqueMsgs.reverse();
-
-                    if (uniqueMsgs.length > 0) {
-                        appendSystemMessage("--- 历史记录开始 ---");
-                        uniqueMsgs.forEach(msg => {
-                            let msgType = "other";
-                            let tag = "History";
-                            
-                            if (msg.sender === currentUser) {
-                                msgType = "self";
-                            }
-                            
-                            if (msg.type === 'single') {
-                                if (msg.sender === currentUser) {
-                                    tag = `To: ${msg.receiver}`;
-                                } else {
-                                    tag = "Private";
-                                }
-                            } else if (msg.type === 'broadcast') {
-                                tag = "Broadcast";
-                            }
-
-                            appendMessage(msg.sender, msg.content, msgType, `${tag} ${msg.date} ${msg.time}`);
-                        });
-                        appendSystemMessage("--- 历史记录结束 ---");
-                    } else {
-                         appendSystemMessage("没有更多历史记录");
-                    }
-                }
-            } else if (cmd === 'chat_unread') {
-                if (code === '1') {
-                    // Payload is newline separated list of: Sender Date Time Content
-                    // Example: user1 2023-10-27 10:00:00 Hello World 
-                    const lines = payload.split('\n');
-                    let count = 0;
-                    lines.forEach(line => {
-                        line = line.trim();
-                        if (!line) return;
-                        
-                        // Parse: Sender Date Time Content
-                        // [0]=Sender, [1]=Date, [2]=Time, [3+] = Content
-                        const parts = line.split(' ');
-                        if (parts.length >= 4) {
-                            const sender = parts[0];
-                            const date = parts[1];
-                            const time = parts[2];
-                            const content = parts.slice(3).join(' ');
-                            
-                            appendMessage(sender, content, "other", `Unread ${date} ${time}`);
-                            count++;
-                        }
-                    });
-                    if (count > 0) {
-                        appendSystemMessage(`收到 ${count} 条离线消息`);
-                    }
-                }
-            } else if (cmd === 'heartbeat') {
-                // Heartbeat response, ignore
-            } else {
-                // Unknown or generic
-                console.log("Unhandled:", cmd, code, payload);
+                break;
             }
         }
 
-        function updateUserList(data) {
-            const list = document.getElementById('user-list');
-            list.innerHTML = ''; // Clear list
-            
-            // Broadcast item
-            const liBroadcast = document.createElement('li');
-            liBroadcast.className = `user-item broadcast ${isBroadcast ? 'active' : ''}`;
-            liBroadcast.onclick = () => selectBroadcast();
-            liBroadcast.innerHTML = `<span>📢 群发广播 (所有人)</span>`;
-            list.appendChild(liBroadcast);
-            
-            // Data format: user1 \nuser2 ...
-            const users = data.split(/[ \n]+/).filter(u => u.trim() !== "");
-            
-            users.forEach(user => {
-                if (user === currentUser) return; // Don't list self
-                
+        function updateOnlineList(data) {
+            const list = document.getElementById('online-user-list');
+            list.innerHTML = `<li class="user-item" onclick="selectBroadcast()"><span>📢 所有人 (广播)</span></li>`;
+            data.split(/[ \n]+/).filter(u => u && u !== currentUser).forEach(user => {
+                const actualUser = user.trim().split(' ')[0];
+                if (!actualUser) return;
                 const li = document.createElement('li');
-                li.className = `user-item ${selectedUsers.has(user) ? 'active' : ''}`;
-                li.onclick = (e) => toggleUser(user);
-                li.setAttribute('data-username', user);
-                
-                const checkMark = selectedUsers.has(user) ? "✅ " : "⬜ ";
-                li.innerHTML = `<span>${checkMark}${user}</span>`;
+                li.className = `user-item`;
+                li.innerHTML = `<span>${actualUser}</span><div class="actions"><button class="small success" onclick="event.stopPropagation(); quickAddFriend('${actualUser}')">加好友</button></div>`;
+                li.onclick = () => {};
                 list.appendChild(li);
             });
+            updateTargetUI();
+        }
+        let deletingFriend = null;
+        function deleteFriend(user) {
+            if (!confirm(`确定删除好友 ${user} 吗？`)) return;
+            deletingFriend = user;
+            send(`delete_friend|${user}`);
+        }
+
+        function updateFriendList(data) {
+            const list = document.getElementById('friend-list');
+            list.innerHTML = '';
+
+            data.split('\n').filter(u => u.trim()).forEach(user => {
             
-            updateTargetDisplay();
+                const actualUser = user.trim().split(' ')[0];
+                if (!actualUser) return;
+            
+                const li = document.createElement('li');
+                li.className = `user-item`;
+            
+                let unreadMark = '';
+                if (privateConversations[actualUser] &&
+                    privateConversations[actualUser].tabEl.classList.contains('unread')) {
+                    unreadMark = '<span style="color:red;font-size:12px;">●</span>';
+                }
+            
+                li.innerHTML = `
+                    <span>👤 ${actualUser} ${unreadMark}</span>
+                    <div class="actions">
+                        <button class="small danger"
+                            onclick="event.stopPropagation(); deleteFriend('${actualUser}')">
+                            删除
+                        </button>
+                    </div>
+                `;
+                
+                li.onclick = () => selectUser(actualUser);
+                
+                list.appendChild(li);
+            });
+        
+            updateTargetUI();
+        }
+
+        function updateGroupList(data) {
+            const list = document.getElementById('group-list');
+            list.innerHTML = '';
+            data.split('\n').filter(line => line.trim()).forEach(line => {
+                const parts = line.split(' ');
+                if (parts.length >= 2) {
+                    const id = parts[0];
+                    const name = parts.slice(1).join(' ').trim();
+                    groupNames[id] = name;
+                    const li = document.createElement('li');
+                    li.className = `user-item`;
+                    
+                    let unreadMark = '';
+                    if (groupConversations[id] && groupConversations[id].tabEl.classList.contains('unread')) {
+                        unreadMark = '<span style="color:red; font-size:12px; margin-left:5px;">●</span>';
+                    }
+
+                    li.innerHTML = `<span>👥 ${name} (ID:${id})${unreadMark}</span>
+                                    <div class="actions">
+                                        <button class="small secondary" onclick="event.stopPropagation(); showGroupMembers('${id}')">成员</button>
+                                        <button class="small danger" onclick="event.stopPropagation(); quitGroup('${id}')">退出</button>
+                                    </div>`;
+                    li.onclick = () => selectGroup(id);
+                    list.appendChild(li);
+
+                    if (groupConversations[id]) {
+                        groupConversations[id].tabEl.querySelector('.tab-name').innerText = `群:${name}`;
+                    }
+                }
+            });
+            updateTargetUI();
+        }
+
+        function handleChatMessage(cmd, code, payload) {
+            if (code === '0') {
+                appendSystemMessageTo(activeChatBoxId(), "发送失败: " + payload);
+                return;
+            }
+            if (!(code === '1' || code === '2')) return;
+            const sep = payload.indexOf(';');
+            if (sep === -1) return;
+
+            let left = payload.substring(0, sep);
+            const content = payload.substring(sep + 1);
+
+            const pipe = left.indexOf('|');
+            if (pipe !== -1) {
+                const maybeMsgId = left.substring(0, pipe);
+                if (/^\d+$/.test(maybeMsgId)) {
+                    left = left.substring(pipe + 1);
+                }
+            }
+
+            const sender = left;
+
+            if (cmd === 'broadcast_chat' && code === '1') {
+                appendMessageTo('chat-box-broadcast', sender, content, 'other', '广播');
+                if (currentModule !== 'broadcast') showNewMessageBadge('broadcast');
+                return;
+            }
+
+            if (cmd === 'single_chat' && code === '1') {
+                ensurePrivateConversation(sender);
+                if (currentModule === 'private' && !activePrivate) {
+                    openPrivateConversation(sender);
+                }
+                appendMessageTo(`private-box-${sender}`, sender, content, 'other', '私聊');
+                if (currentModule !== 'private' || activePrivate !== sender) {
+                    showNewMessageBadge('private');
+                    if (privateConversations[sender]) privateConversations[sender].tabEl.classList.add('unread');
+                    send('show_friends'); // 刷新列表以显示小红点
+                }
+                return;
+            }
+
+            if (cmd === 'multi_chat' && code === '2') {
+                appendMessageTo('chat-box-broadcast', sender, content, 'other', '多播');
+                if (currentModule !== 'broadcast') showNewMessageBadge('broadcast');
+                return;
+            }
+        }
+
+        function handleGroupMessage(code, payload) {
+            if (code === '0') {
+                appendSystemMessageTo(activeChatBoxId(), "群组发送失败: " + payload);
+                return;
+            }
+            if (code === '1') {
+                const parts = payload.split('|');
+                const contentPart = parts[parts.length - 1];
+                const conv_id = parts[parts.length - 2];
+                const [sender, text] = contentPart.split(';');
+                ensureGroupConversation(conv_id);
+                if (currentModule === 'group' && !activeGroup) {
+                    openGroupConversation(conv_id);
+                }
+                appendMessageTo(`group-box-${conv_id}`, sender, text, 'other', `群:${conv_id}`, 'group');
+                if (currentModule !== 'group' || activeGroup !== conv_id) {
+                    showNewMessageBadge('group');
+                    if (groupConversations[conv_id]) groupConversations[conv_id].tabEl.classList.add('unread');
+                    send('show_groups'); // 刷新列表以显示小红点
+                }
+            }
+        }
+
+        function showNewMessageBadge(moduleType) {
+            // 可以在页面显眼处提示有新消息，这里简单使用标题闪烁
+            document.title = "【新消息】Chatroom Pro";
+            setTimeout(() => { document.title = "Chatroom Web Client - Pro"; }, 3000);
+            
+            // 给左侧主导航打上红点
+            if (moduleType) {
+                document.querySelectorAll('.tab').forEach(el => {
+                    const text = el.innerText;
+                    if (moduleType === 'broadcast' && text.includes('在线')) el.classList.add('unread');
+                    if (moduleType === 'private' && text.includes('好友')) el.classList.add('unread');
+                    if (moduleType === 'group' && text.includes('群组')) el.classList.add('unread');
+                });
+            }
+        }
+
+        function handleUnreadMessages(payload) {
+            const lines = payload.split('\n');
+            if (lines.length === 0 || (lines.length === 1 && !lines[0].trim())) {
+                return;
+            }
+
+            // ✅ 分组容器
+            const groups = {
+                broadcast: [],
+                private: {}, // user -> []
+                group: {}    // groupId -> []
+            };
+
+            // ====== 1. 分组 ======
+            lines.forEach(line => {
+                if (!line.trim()) return;
+
+                const parts = line.split(' ');
+                if (parts.length < 6) return;
+
+                const sender = parts[0];
+                const time = parts[1] + " " + parts[2];
+                const type = parts[3];     // broadcast / multi / single
+                const convId = parts[4];
+                const content = parts.slice(5).join(' ');
+
+                const msg = { sender, time, content };
+
+                if (type === 'broadcast') {
+                    groups.broadcast.push(msg);
+                } else if (type === 'multi') {
+                    if (!groups.group[convId]) groups.group[convId] = [];
+                    groups.group[convId].push(msg);
+                } else {
+                    if (!groups.private[sender]) groups.private[sender] = [];
+                    groups.private[sender].push(msg);
+                }
+            });
+
+            // ====== 2. 渲染广播 ======
+            if (groups.broadcast.length > 0) {
+                const boxId = 'chat-box-broadcast';
+
+                appendSystemMessageTo(boxId, "--- 收到离线消息 ---");
+
+                groups.broadcast.forEach(m => {
+                    appendMessageTo(
+                        boxId,
+                        m.sender,
+                        m.content,
+                        'other',
+                        `离线 ${m.time} 广播`
+                    );
+                });
+
+                appendSystemMessageTo(boxId, "--- 离线消息结束 ---");
+            }
+
+            // ====== 3. 渲染私聊 ======
+            Object.keys(groups.private).forEach(user => {
+
+                ensurePrivateConversation(user);
+
+                const boxId = `private-box-${user}`;
+
+                appendSystemMessageTo(boxId, "--- 收到离线消息 ---");
+
+                groups.private[user].forEach(m => {
+                    appendMessageTo(
+                        boxId,
+                        m.sender,
+                        m.content,
+                        'other',
+                        `离线 ${m.time} 私聊`,
+                        'private'
+                    );
+                });
+
+                appendSystemMessageTo(boxId, "--- 离线消息结束 ---");
+
+                // 未读标记
+                if (currentModule !== 'private' || activePrivate !== user) {
+                    if (privateConversations[user]) {
+                        privateConversations[user].tabEl.classList.add('unread');
+                    }
+                }
+            });
+
+            // ====== 4. 渲染群聊 ======
+            Object.keys(groups.group).forEach(gid => {
+
+                ensureGroupConversation(gid);
+
+                const boxId = `group-box-${gid}`;
+
+                appendSystemMessageTo(boxId, "--- 收到离线消息 ---");
+
+                groups.group[gid].forEach(m => {
+                    appendMessageTo(
+                        boxId,
+                        m.sender,
+                        m.content,
+                        'other',
+                        `离线 ${m.time} 群:${gid}`,
+                        'group'
+                    );
+                });
+
+                appendSystemMessageTo(boxId, "--- 离线消息结束 ---");
+
+                if (currentModule !== 'group' || activeGroup !== gid) {
+                    if (groupConversations[gid]) {
+                        groupConversations[gid].tabEl.classList.add('unread');
+                    }
+                }
+            });
+
+            // ====== 5. 顶部红点 ======
+            if (groups.broadcast.length > 0) showNewMessageBadge('broadcast');
+            if (Object.keys(groups.private).length > 0) {
+                showNewMessageBadge('private');
+                send('show_friends');
+            }
+            if (Object.keys(groups.group).length > 0) {
+                showNewMessageBadge('group');
+                send('show_groups');
+            }
+        }
+
+        function switchTab(type) {
+            ['online', 'friends', 'groups'].forEach(t => {
+                document.getElementById(`${t}-panel`).classList.toggle('hidden', t !== type);
+
+                document.querySelectorAll('.tab').forEach(el => {
+                    const match =
+                        (t === 'online' && el.innerText.includes('在线')) ||
+                        (t === 'friends' && el.innerText.includes('好友')) ||
+                        (t === 'groups' && el.innerText.includes('群组'));
+
+                    if (match) {
+                        el.classList.toggle('active', t === type);
+
+                        // ✅ 点击时清红点
+                        if (t === type) {
+                            el.classList.remove('unread');
+                        }
+                    }
+                });
+            });
+
+            if (type === 'friends') {
+                send('show_friends');
+                setModule('private');
+            } else if (type === 'groups') {
+                refreshGroups();
+                setModule('group');
+            } else {
+                selectBroadcast();
+            }
+            }
+
+        function setModule(module) {
+            currentModule = module;
+            document.getElementById('chat-box-broadcast').classList.toggle('hidden', module !== 'broadcast');
+            document.getElementById('private-pane').classList.toggle('hidden', module !== 'private');
+            document.getElementById('group-pane').classList.toggle('hidden', module !== 'group');
+            const target = document.getElementById('target-display');
+            if (module === 'broadcast') {
+                target.innerText = '所有人';
+            } else if (module === 'private') {
+                if (activePrivate) {
+                    target.innerText = activePrivate;
+                } else {
+                    target.innerText = '请选择好友';
+
+                    // 👉 强制显示 empty 面板
+                    const track = document.getElementById('private-track');
+                    track.style.transform = `translateX(0%)`;
+                }
+            } else {
+                if (activeGroup) {
+                    target.innerText = `群组:${activeGroup}`;
+                } else {
+                    target.innerText = '请选择群组';
+                    const track = document.getElementById('group-track');
+                    track.style.transform = `translateX(0%)`;
+                }
+            }
+            updateTargetUI();
+        }
+
+        function activeChatBoxId() {
+
+            if (currentModule === 'broadcast') {
+                return 'chat-box-broadcast';
+            }
+        
+            if (currentModule === 'private') {
+                if (!activePrivate) return 'private-empty-box';
+                return `private-box-${activePrivate}`;
+            }
+        
+            if (currentModule === 'group') {
+                if (!activeGroup) return 'group-empty-box';
+                return `group-box-${activeGroup}`;
+            }
         }
 
         function selectBroadcast() {
-            isBroadcast = true;
-            selectedUsers.clear();
-            refreshUserListUI(); // We need to re-render to update checkmarks
+            setModule('broadcast');
         }
 
-        function toggleUser(user) {
-            if (isBroadcast) {
-                isBroadcast = false; // Switch off broadcast if selecting a user
-            }
-            
-            if (selectedUsers.has(user)) {
-                selectedUsers.delete(user);
-                if (selectedUsers.size === 0) {
-                    isBroadcast = true; // Revert to broadcast if last user deselected? Or stay in "no selection" mode?
-                    // Let's default back to broadcast for better UX
+        function selectUser(user) {
+            setModule('private');
+            ensurePrivateConversation(user);
+            openPrivateConversation(user);
+        }
+
+        function selectGroup(id) {
+            setModule('group');
+            ensureGroupConversation(id);
+            openGroupConversation(id);
+        }
+
+        function updateTargetUI() {
+            document.querySelectorAll('.user-item').forEach(li => {
+                const span = li.querySelector('span');
+                if (!span) return;
+                // 去除所有图标以及可能的小红点文本(●)
+                const name = span.innerText.replace(/[📢👤👥● ]/g, '');
+                if (currentModule === 'broadcast') {
+                    li.classList.toggle('active', li.innerText.includes('所有人'));
+                } else if (currentModule === 'private') {
+                    li.classList.toggle('active', name === activePrivate);
+                } else if (currentModule === 'group') {
+                    li.classList.toggle('active', name.includes(`(ID:${activeGroup})`));
                 }
-            } else {
-                selectedUsers.add(user);
-            }
-            refreshUserListUI();
-        }
-        
-        // Helper to refresh UI without full list reload
-        function refreshUserListUI() {
-             const list = document.getElementById('user-list');
-             // Update Broadcast Item (first child)
-             const liBroadcast = list.firstElementChild;
-             if (liBroadcast) {
-                 liBroadcast.className = `user-item broadcast ${isBroadcast ? 'active' : ''}`;
-             }
-             
-             // Update User Items
-             // Skip first child
-             let index = 1;
-             const items = list.children;
-             // We need to match items to users. 
-             // Ideally we should store the username in a data attribute.
-             // But since we just rebuilt the list in updateUserList, we might not have data attributes unless we add them.
-             // Let's rely on innerText parsing or better yet, just request a refresh if we had the full list data.
-             // Since we don't store the full user list globally, let's just trigger 'show_online_user' to refresh?
-             // No, that causes network traffic. Let's just modify the DOM based on text content.
-             
-             for (let i = 1; i < items.length; i++) {
-                 const item = items[i];
-                 // Text content includes the checkmark emoji, need to strip it or read raw user name
-                 // Let's fix updateUserList to use data attributes for robustness.
-                 const user = item.getAttribute('data-username');
-                 if (user) {
-                     const isSelected = selectedUsers.has(user);
-                     item.className = `user-item ${isSelected ? 'active' : ''}`;
-                     const checkMark = isSelected ? "✅ " : "⬜ ";
-                     item.innerHTML = `<span>${checkMark}${user}</span>`;
-                 }
-             }
-             
-             updateTargetDisplay();
+            });
         }
 
-        // We need to patch updateUserList to add data-username
-        // Let's overwrite updateUserList again with the robust version.
+        // ====== 核心修复版本 ======
+
+        function sendMessage() {
+            const input = document.getElementById('message-input');
+            const text = input.value.trim();
+            if (!text) return;
         
-        function updateTargetDisplay() {
-            const display = document.getElementById('target-display');
-            if (isBroadcast) {
-                display.innerText = "所有人 (广播)";
-            } else {
-                const users = Array.from(selectedUsers);
-                if (users.length === 0) {
-                     display.innerText = "所有人 (广播)"; // Fallback
-                } else if (users.length === 1) {
-                    display.innerText = users[0];
-                } else {
-                    display.innerText = `${users.length} 人: ${users.join(", ")}`;
+            if (currentModule === 'broadcast') {
+                send(`broadcast_chat|${text}`);
+                appendMessageTo('chat-box-broadcast', '我', text, 'self', '广播');
+            
+            } else if (currentModule === 'private') {
+            
+                if (!activePrivate) {
+                    appendSystemMessage("请选择好友");
+                    return;
                 }
+            
+                // ✅ 确保窗口存在
+                ensurePrivateConversation(activePrivate);
+            
+                send(`single_chat|${activePrivate}|${text}`);
+            
+                appendMessageTo(
+                    `private-box-${activePrivate}`,
+                    '我',
+                    text,
+                    'self',
+                    `私聊 -> ${activePrivate}`,
+                    'private'
+                );
+            
+            } else if (currentModule === 'group') {
+            
+                if (!activeGroup) {
+                    appendSystemMessage("请选择群组");
+                    return;
+                }
+            
+                // ✅ 确保窗口存在
+                ensureGroupConversation(activeGroup);
+            
+                send(`group_chat|${activeGroup}|${text}`);
+            
+                appendMessageTo(
+                    `group-box-${activeGroup}`,
+                    '我',
+                    text,
+                    'self',
+                    `群:${activeGroup}`,
+                    'group'
+                );
             }
+        
+            input.value = '';
         }
 
-        function appendMessage(sender, text, type, tag) {
-            const box = document.getElementById('chat-box');
-            const div = document.createElement('div');
-            div.className = `message ${type}`;
-            if (tag === "Private") div.classList.add('private');
-            
-            const meta = document.createElement('span');
-            meta.className = 'message-meta';
-            meta.innerText = tag ? `[${tag}] ${sender}` : sender;
-            
-            const content = document.createElement('div');
-            content.innerText = text;
-            
-            div.appendChild(meta);
-            div.appendChild(content);
-            box.appendChild(div);
-            box.scrollTop = box.scrollHeight;
+        function appendMessage(sender, text, type, tag, subType = '') {
+            appendMessageTo(activeChatBoxId(), sender, text, type, tag, subType);
         }
-        
+
+        function appendMessageTo(boxId, sender, text, type, tag, subType = '') {
+
+           let box = document.getElementById(boxId);
+
+           // ❗核心修复：如果不存在，自动创建
+           if (!box) {
+               console.warn("box不存在，自动创建:", boxId);
+
+               if (boxId.startsWith('private-box-')) {
+                   const user = boxId.replace('private-box-', '');
+                   ensurePrivateConversation(user);
+               }
+           
+               if (boxId.startsWith('group-box-')) {
+                   const id = boxId.replace('group-box-', '');
+                   ensureGroupConversation(id);
+               }
+           
+               box = document.getElementById(boxId);
+           
+               if (!box) {
+                   console.error("创建失败:", boxId);
+                   return;
+               }
+           }
+       
+           const div = document.createElement('div');
+           div.className = `message ${type} ${subType}`;
+           div.innerHTML = `
+               <span class="message-meta">[${tag}] ${sender}</span>
+               <div>${text}</div>
+           `;
+       
+           box.appendChild(div);
+       
+           // ✅ 自动滚动
+           box.scrollTop = box.scrollHeight;   
+        }
+
         function appendSystemMessage(text) {
-            const box = document.getElementById('chat-box');
+            appendSystemMessageTo(activeChatBoxId(), text);
+        }
+
+        function appendSystemMessageTo(boxId, text) {
+            const box = document.getElementById(boxId);
             const div = document.createElement('div');
             div.className = 'message system';
             div.innerText = text;
@@ -487,90 +907,364 @@
             box.scrollTop = box.scrollHeight;
         }
 
-        function doLogin() {
-            const user = document.getElementById('username').value;
-            const pass = document.getElementById('password').value;
-            if(!user || !pass) return alert("请输入用户名和密码");
-            send(`sign_in|${user}|${pass}`);
+        function appendFriendRequest(fromUser) {
+            const box = document.getElementById('chat-box-broadcast');
+            const div = document.createElement('div');
+            div.className = 'message system';
+
+            const label = document.createElement('div');
+            label.innerText = `收到来自 ${fromUser} 的好友申请`;
+
+            const actions = document.createElement('div');
+            actions.style.marginTop = '8px';
+            actions.style.display = 'flex';
+            actions.style.gap = '8px';
+            actions.style.justifyContent = 'center';
+
+            const btnAccept = document.createElement('button');
+            btnAccept.className = 'small success';
+            btnAccept.innerText = '接受';
+            btnAccept.onclick = () => {
+                btnAccept.disabled = true;
+                btnReject.disabled = true;
+                send(`handle_friend|${fromUser}|accepted`);
+                label.innerText = `已接受 ${fromUser} 的好友申请`;
+            };
+
+            const btnReject = document.createElement('button');
+            btnReject.className = 'small danger';
+            btnReject.innerText = '拒绝';
+            btnReject.onclick = () => {
+                btnAccept.disabled = true;
+                btnReject.disabled = true;
+                send(`handle_friend|${fromUser}|rejected`);
+                label.innerText = `已拒绝 ${fromUser} 的好友申请`;
+            };
+
+            actions.appendChild(btnAccept);
+            actions.appendChild(btnReject);
+            div.appendChild(label);
+            div.appendChild(actions);
+            box.appendChild(div);
+            box.scrollTop = box.scrollHeight;
         }
 
-        function doRegister() {
-            const user = document.getElementById('username').value;
-            const pass = document.getElementById('password').value;
-            if(!user || !pass) return alert("请输入用户名和密码");
-            send(`sign_up|${user}|${pass}`);
+        function sendHistory() {
+            if (currentModule === 'broadcast') {
+                pendingHistoryBoxId = 'chat-box-broadcast';
+                send('show_history|broadcast');
+            } else if (currentModule === 'private') {
+                if (!activePrivate) { appendSystemMessage("请先选择一个好友"); return; }
+                pendingHistoryBoxId = `private-box-${activePrivate}`;
+                send(`show_history|private|${activePrivate}`);
+            } else {
+                if (!activeGroup) { appendSystemMessage("请先选择一个群组"); return; }
+                pendingHistoryBoxId = `group-box-${activeGroup}`;
+                send(`show_history|group|${activeGroup}`);
+            }
         }
         
-        function logout() {
-            send("q"); // Send quit command
-            stopHeartbeat();
-            resetUI();
-            if (ws) ws.close();
+        function closePrivateConversation(user) {
+
+           const conv = privateConversations[user];
+           if (!conv) return;
+
+           // 1️⃣ 删除 DOM
+           const box = document.getElementById(conv.boxId);
+           if (box) box.remove();
+
+           if (conv.tabEl) conv.tabEl.remove();
+
+           // 2️⃣ 删除数据
+           delete privateConversations[user];
+
+           const idx = privateOrder.indexOf(user);
+           if (idx !== -1) privateOrder.splice(idx, 1);
+
+           // 3️⃣ 如果关的是当前窗口
+           if (activePrivate === user) {
+               activePrivate = null;
+
+               const track = document.getElementById('private-track');
+               track.style.transform = `translateX(0%)`;
+
+               document.getElementById('target-display').innerText = '请选择好友';
+           }
+       
+           // 4️⃣ 清理红点
+           clearTopUnreadIfNeeded('private');
         }
 
-        function startHeartbeat() {
-            stopHeartbeat(); // Clear any existing
-            // Send heartbeat every 15 seconds (server timeout is 40s)
-            heartbeatInterval = setInterval(() => {
-                if (ws && ws.readyState === WebSocket.OPEN) {
-                    send("heartbeat|");
+        function ensurePrivateConversation(user) {
+            if (privateConversations[user]) return;
+
+            const tabs = document.getElementById('private-tabs');
+            const track = document.getElementById('private-track');
+
+            const tab = document.createElement('div');
+            tab.className = 'conv-tab';
+
+            // ✅ 加 ×
+            tab.innerHTML = `
+                <span class="tab-name">${user}</span>
+                <span class="tab-close" onclick="event.stopPropagation(); closePrivateConversation('${user}')">×</span>
+            `;
+
+            tab.onclick = () => {
+                setModule('private');
+                openPrivateConversation(user);
+            };
+        
+            tabs.appendChild(tab);
+        
+            const box = document.createElement('div');
+            box.id = `private-box-${user}`;
+            box.className = 'chat-box conv-slide';
+        
+            track.appendChild(box);
+        
+            privateConversations[user] = {
+                boxId: box.id,
+                tabEl: tab
+            };
+        
+            privateOrder.push(user);
+        }
+
+        function clearTopUnreadIfNeeded(moduleType) {
+
+            if (moduleType === 'private') {
+                const hasUnread = Object.values(privateConversations)
+                    .some(c => c.tabEl.classList.contains('unread'));
+
+                if (!hasUnread) {
+                    document.querySelectorAll('.tab').forEach(el => {
+                        if (el.innerText.includes('好友')) {
+                            el.classList.remove('unread');
+                        }
+                    });
                 }
-            }, 15000);
-            console.log("Heartbeat started");
-        }
-
-        function stopHeartbeat() {
-            if (heartbeatInterval) {
-                clearInterval(heartbeatInterval);
-                heartbeatInterval = null;
-                console.log("Heartbeat stopped");
             }
-        }
 
-        function sendMessage() {
-            const input = document.getElementById('message-input');
-            const text = input.value;
-            if (!text) return;
-            
-            if (isBroadcast) {
-                // Broadcast
-                send(`broadcast_chat|${text}`);
-                appendMessage("我", text, "self", "Broadcast");
-            } else {
-                const users = Array.from(selectedUsers);
-                if (users.length === 0) {
-                     // Should act as broadcast if nothing selected? Or prompt?
-                     // Logic in toggleUser sets isBroadcast=true if empty, so this might not be reached easily.
-                     // But just in case:
-                     send(`broadcast_chat|${text}`);
-                     appendMessage("我", text, "self", "Broadcast");
-                } else if (users.length === 1) {
-                    // Single Chat
-                    const target = users[0];
-                    send(`single_chat|${target}|${text}`);
-                    appendMessage("我", text, "self", "Private -> " + target);
-                } else {
-                    // Multi Chat
-                    // Format: multi_chat|user1 user2|content
-                    const userListStr = users.join(' ');
-                    send(`multi_chat|${userListStr}|${text}`);
-                    appendMessage("我", text, "self", "Multi -> " + users.join(', '));
+            if (moduleType === 'group') {
+                const hasUnread = Object.values(groupConversations)
+                    .some(c => c.tabEl.classList.contains('unread'));
+
+                if (!hasUnread) {
+                    document.querySelectorAll('.tab').forEach(el => {
+                        if (el.innerText.includes('群组')) {
+                            el.classList.remove('unread');
+                        }
+                    });
                 }
             }
-            input.value = '';
+            }
+
+        function openPrivateConversation(user) {
+             activePrivate = user;
+
+             const idx = privateOrder.indexOf(user);
+             const track = document.getElementById('private-track');
+             track.style.transform = `translateX(-${(idx + 1) * 100}%)`;
+
+             Object.entries(privateConversations).forEach(([u, v]) => {
+                 v.tabEl.classList.toggle('active', u === user);
+             });
+         
+             // ✅ 清除当前会话红点
+             if (privateConversations[user]) {
+                 privateConversations[user].tabEl.classList.remove('unread');
+             }
+         
+             // ✅ 清除左侧好友红点（刷新列表）
+             send('show_friends');
+         
+             // ✅ 如果没有其他未读，清除顶部红点
+             clearTopUnreadIfNeeded('private');
+         
+             document.getElementById('target-display').innerText = user;
         }
 
-        function send(data) {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(data);
-            } else {
-                alert("未连接服务器");
+        function closeGroupConversation(id) {
+
+             const conv = groupConversations[id];
+             if (!conv) return;
+
+             // 1️⃣ 删除 DOM
+             const box = document.getElementById(conv.boxId);
+             if (box) box.remove();
+
+             if (conv.tabEl) conv.tabEl.remove();
+
+             // 2️⃣ 删除数据
+             delete groupConversations[id];
+
+             const idx = groupOrder.indexOf(id);
+             if (idx !== -1) groupOrder.splice(idx, 1);
+
+             // 3️⃣ 当前窗口处理
+             if (activeGroup === id) {
+                 activeGroup = null;
+
+                 const track = document.getElementById('group-track');
+                 track.style.transform = `translateX(0%)`;
+
+                 document.getElementById('target-display').innerText = '请选择群组';
+             }
+         
+            // 4️⃣ 红点处理
+            clearTopUnreadIfNeeded('group');
+        }
+
+        function ensureGroupConversation(id) {
+           if (groupConversations[id]) return;
+
+           const tabs = document.getElementById('group-tabs');
+           const track = document.getElementById('group-track');
+
+           const tab = document.createElement('div');
+           tab.className = 'conv-tab';
+
+           const name = groupNames[id] ? groupNames[id] : id;
+
+           tab.innerHTML = `
+               <span class="tab-name">群:${name}</span>
+               <span class="tab-close" onclick="event.stopPropagation(); closeGroupConversation('${id}')">×</span>
+           `;
+
+           tab.onclick = () => {
+               setModule('group');
+               openGroupConversation(id);
+           };
+       
+           tabs.appendChild(tab);
+       
+           const box = document.createElement('div');
+           box.id = `group-box-${id}`;
+           box.className = 'chat-box conv-slide';
+       
+           track.appendChild(box);
+       
+           groupConversations[id] = { boxId: box.id, tabEl: tab };
+           groupOrder.push(id);
+        }
+
+        function openGroupConversation(id) {
+            activeGroup = id;
+
+            const idx = groupOrder.indexOf(id);
+            const track = document.getElementById('group-track');
+            track.style.transform = `translateX(-${(idx + 1) * 100}%)`;
+
+            Object.entries(groupConversations).forEach(([gid, v]) => {
+                v.tabEl.classList.toggle('active', gid === id);
+            });
+        
+            // ✅ 清除当前群红点
+            if (groupConversations[id]) {
+                groupConversations[id].tabEl.classList.remove('unread');
+            }
+        
+            // ✅ 刷新左侧群列表
+            send('show_groups');
+        
+            // ✅ 清除顶部红点（如果没未读）
+            clearTopUnreadIfNeeded('group');
+        
+            document.getElementById('target-display').innerText =
+                groupNames[id] ? `群组:${groupNames[id]}` : `群组:${id}`;
+        }
+
+        function handleGroupInvite(code, payload) {
+            if (code !== '2') return;
+            const parts = payload.split('|');
+            const convId = parts[0] || '';
+            const groupName = parts[1] || '';
+            const inviter = parts[2] || '';
+            if (!convId) return;
+            if (groupName) {
+                groupNames[convId] = groupName;
+            }
+            ensureGroupConversation(convId);
+            refreshGroups();
+            appendSystemMessageTo(`group-box-${convId}`, `你已被 ${inviter} 邀请加入群 ${groupName || convId}`);
+        }
+
+        function addFriend() {
+            const name = document.getElementById('add-friend-input').value.trim();
+            if (name) send(`add_friend|${name}`);
+        }
+
+        function quickAddFriend(name) { send(`add_friend|${name}`); }
+
+        function createGroup() {
+            const name = document.getElementById('group-name-input').value.trim();
+            if (name) send(`create_group|${name}`);
+        }
+
+        function joinGroup() {
+            const id = document.getElementById('group-id-input').value.trim();
+            if (id) send(`join_group|${id}`);
+        }
+
+        function quitGroup(id) {
+            if (confirm("确定要退出该群组吗？")) {
+                send(`quit_group|${id}`);
             }
         }
 
-        function handleKeyPress(e) {
-            if (e.key === 'Enter') sendMessage();
+        function showGroupMembers(id) {
+            send(`show_group_members|${id}`);
         }
+
+        function inviteGroup() {
+            const name = document.getElementById('group-invite-input').value.trim();
+            if (!activeGroup) {
+                appendSystemMessage("请先在群组列表中选择一个群组");
+                return;
+            }
+            if (!name) return;
+            send(`invite_group|${activeGroup}|${name}`);
+        }
+
+        function handleHistory(payload) {
+            const boxId = pendingHistoryBoxId || activeChatBoxId();
+            pendingHistoryBoxId = null;
+            const lines = payload.split('\n');
+            if (lines.length === 0 || (lines.length === 1 && !lines[0].trim())) {
+                appendSystemMessageTo(boxId, "没有历史消息记录");
+                return;
+            }
+
+            appendSystemMessageTo(boxId, "--- 历史记录开始 (最近50条) ---");
+            lines.reverse().forEach(line => {
+                if (!line.trim()) return;
+                const parts = line.split(' ');
+                if (parts.length >= 6) {
+                    const sender = parts[0];
+                    const time = parts[2] + " " + parts[3];
+                    const type = parts[4];
+                    const conv_id = parts[5];
+                    const content = parts.slice(6).join(' ');
+                    let tag = type === 'multi' ? `群:${conv_id}` : (type === 'broadcast' ? '广播' : '私聊');
+                    appendMessageTo(boxId, sender, content, sender == currentUser ? 'self' : 'other', `${tag} ${time}`);
+                }
+            });
+            appendSystemMessageTo(boxId, "--- 历史记录结束 ---");
+        }
+
+        function refreshGroups() {
+            send('show_groups');
+        }
+
+        function doLogin() { send(`sign_in|${document.getElementById('username').value}|${document.getElementById('password').value}`); }
+        function doRegister() { send(`sign_up|${document.getElementById('username').value}|${document.getElementById('password').value}`); }
+        function send(data) { if (ws && ws.readyState === WebSocket.OPEN) ws.send(data); }
+        function logout() { send("q"); ws.close(); }
+        function startHeartbeat() { heartbeatInterval = setInterval(() => send("heartbeat|"), 15000); }
+        function stopHeartbeat() { clearInterval(heartbeatInterval); }
+        function handleKeyPress(e) { if (e.key === 'Enter') sendMessage(); }
+        function resetUI() { location.reload(); }
     </script>
 </body>
 </html>

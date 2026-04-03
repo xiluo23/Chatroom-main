@@ -15,6 +15,10 @@ Redis::Redis()
 
 Redis::~Redis()
 {
+    _running = false;
+    // 这里不再 join 线程，因为它可能在 redisGetReply 中阻塞
+    // 但通过设置 _running = false 和关闭上下文，可以强制其退出
+    
     if (_publish_context != nullptr)
     {
         redisFree(_publish_context);
@@ -22,6 +26,7 @@ Redis::~Redis()
 
     if (_subcribe_context != nullptr)
     {
+        // 关闭上下文会使阻塞的 redisGetReply 立即返回错误
         redisFree(_subcribe_context);
     }
 }
@@ -145,13 +150,9 @@ void Redis::process_pending_commands()
             }
         }
         
-        // 关键修复：redisAppendCommand 之后必须调用 redisGetReply 来消耗掉 Redis 返回的确认消息
-        // 否则这些消息会堆积在缓冲区，干扰后续业务消息的解析
-        redisReply *confirm_reply = nullptr;
-        if (REDIS_OK == redisGetReply(this->_subcribe_context, (void **)&confirm_reply))
-        {
-            if (confirm_reply) freeReplyObject(confirm_reply);
-        }
+        // 移除这里的 redisGetReply。
+        // 我们在 observer_channel_message 的主循环中统一处理所有回复。
+        // 这样可以避免在消息和确认同时到达时发生回复消耗错位（同步错误）。
     }
 }
 
@@ -168,23 +169,36 @@ void Redis::observer_channel_message()
         int rc = redisGetReply(this->_subcribe_context, (void **)&reply);
         if (rc == REDIS_OK)
         {
-            // 关键修复：在高并发下，如果 redisGetReply 成功但返回的 reply 为空（可能是被其他逻辑消耗或特殊时序）
-            // 直接跳过本次处理，避免对 nullptr 进行 free 或访问
             if (reply == nullptr) continue;
 
-            // 订阅收到的消息是一个带三元素的数组
+            // 订阅收到的消息是一个带三个元素的数组
+            // 无论是 "message" (业务数据), "subscribe" (确认), 还是 "unsubscribe" (确认)
             if (reply->type == REDIS_REPLY_ARRAY && reply->elements == 3)
             {
-                // 只有当消息类型为 "message" 时才处理业务逻辑
-                // "subscribe" 和 "unsubscribe" 消息的 element[2] 是整数，访问 str 会导致 crash
-                if (reply->element[0] && reply->element[0]->str && 
-                    strcasecmp(reply->element[0]->str, "message") == 0 &&
-                    reply->element[1] && reply->element[1]->str &&
-                    reply->element[2] && reply->element[2]->str)
+                // 必须严格检查每个 element 的类型，防止非字符串类型导致内存损坏
+                if (reply->element[0] && reply->element[0]->type == REDIS_REPLY_STRING && reply->element[0]->str)
                 {
-                    _notify_message_handler(atoi(reply->element[1]->str) , reply->element[2]->str);
+                    const char* type_str = reply->element[0]->str;
+                    
+                    if (strcasecmp(type_str, "message") == 0)
+                    {
+                        // 业务消息：[ "message", channel, payload ]
+                        if (reply->element[1] && reply->element[1]->type == REDIS_REPLY_STRING && reply->element[1]->str &&
+                            reply->element[2] && reply->element[2]->type == REDIS_REPLY_STRING && reply->element[2]->str)
+                        {
+                            _notify_message_handler(atoi(reply->element[1]->str), reply->element[2]->str);
+                        }
+                    }
+                    else if (strcasecmp(type_str, "subscribe") == 0 || strcasecmp(type_str, "unsubscribe") == 0)
+                    {
+                        // 确认消息：[ "subscribe"/"unsubscribe", channel, total_count ]
+                        // element[1] 是字符串，但 element[2] 是整数。
+                        // 我们只需要消费掉它，不需要额外处理。
+                        LOG_DEBUG("Redis command confirmed: " + string(type_str));
+                    }
                 }
             }
+            
             freeReplyObject(reply);
             reply = nullptr;
         }

@@ -131,10 +131,9 @@ bool MyDb::select_one_SQL(string sql, string& str) {
     for(int i=0;i<num_fields;i++){
         if(row[i]){
             str+=row[i];
-            str+="|";
         }
-        else
-            break;
+        // 如果字段为 NULL，则保持为空字符串，但仍需添加分隔符
+        str+="|";
     }
     if(!str.empty())
         str.pop_back();
