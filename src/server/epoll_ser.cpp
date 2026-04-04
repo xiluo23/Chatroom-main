@@ -238,7 +238,7 @@ void close_clint(int epoll_fd,int clint_fd){
         
         int uid = g_close_conn.get_id(username.c_str());
         if (uid != -1) {
-            string sql = "update user_status set is_online = 0 where user_id ="+to_string(uid);
+            string sql = "update user_status set is_online = 0, last_active = NOW() where user_id ="+to_string(uid);
             DbHandle::getInstance()->add_task(sql);
             
             // Redis 退订
@@ -1423,9 +1423,6 @@ void process_clint_data(Task&task){
             // pool.en_conn(conn);
             return;
         }
-        int user_id=conn->get_id(username.c_str());
-        string sql="update user_status set last_active = NOW() where user_id ="+to_string(user_id);
-        DbHandle::getInstance()->add_task(sql);
         char msg[]="heartbeat|1|ok";
         update_expire(clint_fd);
         en_resp(msg,clint_fd);
