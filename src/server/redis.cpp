@@ -16,21 +16,29 @@ Redis::Redis()
 Redis::~Redis()
 {
     _running = false;
-    // 这里不再 join 线程，因为它可能在 redisGetReply 中阻塞
-    // 但通过设置 _running = false 和关闭上下文，可以强制其退出
-    
-    if (_publish_context != nullptr)
+
+    _cmd_cv.notify_all();
+
+    if (_sub_thread.joinable())
+    {
+        _sub_thread.join();
+    }
+
+    if (_subcribe_context)
+    {
+        redisFree(_subcribe_context);
+        _subcribe_context = nullptr;
+    }
+
+
+
+    if (_publish_context)
     {
         redisFree(_publish_context);
         _publish_context = nullptr;
     }
 
-    if (_subcribe_context != nullptr)
-    {
-        // 关闭上下文会使阻塞的 redisGetReply 立即返回错误
-        redisFree(_subcribe_context);
-        _subcribe_context = nullptr;
-    }
+    LOG_INFO("Redis service stopped successfully.");
 }
 
 bool Redis::connect()
@@ -232,36 +240,6 @@ void Redis::observer_channel_message()
 void Redis::init_notify_handler(function<void(int,string)> fn)
 {
     this->_notify_message_handler = fn;
-}
-
-void Redis::stop()
-{
-    // 1. 停止运行标志
-    _running = false;
-
-    // 2. 唤醒可能阻塞的订阅线程
-    _cmd_cv.notify_all();
-
-    // 3. 关闭 Redis 上下文，强制退出可能阻塞的 redisGetReply
-    if (_subcribe_context)
-    {
-        redisFree(_subcribe_context);
-        _subcribe_context = nullptr;
-    }
-
-    if (_publish_context)
-    {
-        redisFree(_publish_context);
-        _publish_context = nullptr;
-    }
-
-    // 4. 等待订阅线程安全退出
-    if (_sub_thread.joinable())
-    {
-        _sub_thread.join();
-    }
-
-    LOG_INFO("Redis service stopped successfully.");
 }
 
 
