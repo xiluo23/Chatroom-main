@@ -99,31 +99,19 @@ void ParserPool::processBuffer(int fd) {
         ClientBuffer &buf = *(it->second);
 
         std::string message;
-        int consumed = extractMessage(buf.buffer, buf.pos, message);
+        int consumed = extractMessageCircular(buf.buffer, PROTOCOL_MAX_RECV_BUFFER_SIZE, buf.head, buf.tail, message);
         
         if (consumed == -1) {
             // 数据不完整，等待更多数据
             pthread_mutex_unlock(_buffer_mutex);
             break;
         } else if (consumed == -2) {
-            // 无效长度，移位保护
-            if (buf.pos > 1) {
-                memmove(buf.buffer, buf.buffer + 1, buf.pos - 1);
-                buf.pos -= 1;
-            } else {
-                buf.pos = 0;
-            }
+            // 无效长度，移位 1 字节
+            buf.head = (buf.head + 1) % PROTOCOL_MAX_RECV_BUFFER_SIZE;
             pthread_mutex_unlock(_buffer_mutex);
             continue; // 继续解析
-        } else if (consumed == 0) {
-            pthread_mutex_unlock(_buffer_mutex);
-            break;
         } else {
-            // 完整消息 -> 移除已消费数据
-            if (buf.pos >= (size_t)consumed) {
-                memmove(buf.buffer, buf.buffer + consumed, buf.pos - consumed);
-                buf.pos -= consumed;
-            }
+            // 完整消息 -> head 已更新
             
             // 重要：先解锁再执行可能耗时的 addTask，避免阻塞其他 Parser 线程和 Reactor 线程
             pthread_mutex_unlock(_buffer_mutex);

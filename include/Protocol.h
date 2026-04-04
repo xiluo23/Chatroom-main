@@ -100,3 +100,62 @@ inline int receiveMessage(int fd, string& message, char* buffer, int& buffer_pos
     }
     return -1;
 }
+
+// 环形缓冲区版本的 extractMessage
+inline int extractMessageCircular(const char* buffer, size_t buffer_size, size_t& read_pos, string& message) {
+    size_t current_size = (buffer_size - read_pos + buffer_size) % buffer_size; // 假设 tail 是 buffer_size，但需要传递 tail
+    // 实际上，需要传递 tail
+    // 重新定义函数签名
+    // 为了简单，假设 buffer_size 是 PROTOCOL_MAX_RECV_BUFFER_SIZE，read_pos 是 head，tail 是全局或传递
+    // 简化：传递 head 和 tail
+    return current_size < PROTOCOL_HEADER_SIZE ? -1 : 0; // 先检查是否有足够数据读取长度字段
+}
+
+inline int extractMessageCircular(const char* buffer, size_t buffer_size, size_t& head, size_t tail, string& message) {
+    size_t current_size = (tail - head + buffer_size) % buffer_size;
+    if (current_size < PROTOCOL_HEADER_SIZE) {
+        return -1;  // 数据不完整
+    }
+    
+    // 读取消息长度（大端序）
+    uint32_t msg_len;
+    size_t header_pos = head;
+    if (header_pos + PROTOCOL_HEADER_SIZE <= buffer_size) {
+        memcpy(&msg_len, buffer + header_pos, PROTOCOL_HEADER_SIZE);
+    } else {
+        // 跨越边界
+        size_t first = buffer_size - header_pos;
+        char temp[4];
+        memcpy(temp, buffer + header_pos, first);
+        memcpy(temp + first, buffer, PROTOCOL_HEADER_SIZE - first);
+        memcpy(&msg_len, temp, 4);
+    }
+    msg_len = ntohl(msg_len);
+    
+    // 验证消息长度的有效性
+    if (msg_len == 0 || msg_len > PROTOCOL_MAX_MESSAGE_SIZE) {
+        return -2;  // 消息长度无效
+    }
+    
+    // 检查是否有完整的消息
+    size_t total_needed = PROTOCOL_HEADER_SIZE + msg_len;
+    if (current_size < total_needed) {
+        return -1;  // 消息不完整
+    }
+    
+    // 提取消息内容
+    message.resize(msg_len);
+    size_t data_pos = (head + PROTOCOL_HEADER_SIZE) % buffer_size;
+    size_t to_copy = msg_len;
+    size_t first = min(to_copy, buffer_size - data_pos);
+    memcpy(&message[0], buffer + data_pos, first);
+    if (to_copy > first) {
+        memcpy(&message[first], buffer, to_copy - first);
+    }
+    
+    // 更新 head
+    head = (head + total_needed) % buffer_size;
+    
+    // 返回消费的字节数
+    return total_needed;
+}

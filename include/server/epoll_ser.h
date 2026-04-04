@@ -47,10 +47,15 @@ struct Response{
 // 客户端接收缓冲区（用于处理粘包/拆包）
 struct ClientBuffer {
     char buffer[PROTOCOL_MAX_RECV_BUFFER_SIZE];
-    int pos;  // 当前缓冲区中的数据长度
+    size_t head; // 读指针
+    size_t tail; // 写指针
     
-    ClientBuffer() : pos(0) {
+    ClientBuffer() : head(0), tail(0) {
         memset(buffer, 0, sizeof(buffer));
+    }
+    
+    size_t size() const {
+        return (tail - head + PROTOCOL_MAX_RECV_BUFFER_SIZE) % PROTOCOL_MAX_RECV_BUFFER_SIZE;
     }
 };
 

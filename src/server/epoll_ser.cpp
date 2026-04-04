@@ -286,15 +286,18 @@ void handle_clint_data(int epoll_fd,int clint_fd){
         }
         else{
             // 将新数据追加到缓冲区
-            if(client_buf.pos + bytes_read <= PROTOCOL_MAX_RECV_BUFFER_SIZE){
-                memcpy(client_buf.buffer + client_buf.pos, temp_buf, bytes_read);
-                client_buf.pos += bytes_read;
-            }
-            else{
-                LOG_NET_ERROR(clint_fd,"Error: Receive buffer overflow (pos=" + to_string(client_buf.pos) + ", read=" + to_string(bytes_read) + ")", ERR_BUFFER_OVERFLOW);
+            size_t available = PROTOCOL_MAX_RECV_BUFFER_SIZE - client_buf.size();
+            if (available < bytes_read) {
+                LOG_NET_ERROR(clint_fd,"Error: Receive buffer overflow (size=" + to_string(client_buf.size()) + ", read=" + to_string(bytes_read) + ")", ERR_BUFFER_OVERFLOW);
                 close_clint(epoll_fd,clint_fd);
                 return;
             }
+            size_t first = min((size_t)bytes_read, PROTOCOL_MAX_RECV_BUFFER_SIZE - client_buf.tail);
+            memcpy(client_buf.buffer + client_buf.tail, temp_buf, first);
+            if (bytes_read > first) {
+                memcpy(client_buf.buffer, temp_buf + first, bytes_read - first);
+            }
+            client_buf.tail = (client_buf.tail + bytes_read) % PROTOCOL_MAX_RECV_BUFFER_SIZE;
         }
     }
     
