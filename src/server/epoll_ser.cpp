@@ -57,11 +57,14 @@ void handle_sigint(int signo){
 void update_expire(int clint_fd){
     time_t now = time(NULL);
     time_t expire = now + HEARTBEAT_TIMEOUT_SEC;
+
     latest_expire[clint_fd] = expire;
     Timer timer;
     timer.fd = clint_fd;
     timer.expire = expire;
+    pthread_mutex_lock(&timer_mutex);
     hp.push(timer);
+    pthread_mutex_unlock(&timer_mutex);
 }
 static string escape_sql(const string &s) {
     string res;
@@ -1444,9 +1447,16 @@ void handle_response(){
         Response resp=resp_queue.front();
         resp_queue.pop();
         pthread_mutex_unlock(&resp_mutex);
+        //clint_fd已经关闭
+        pthread_mutex_lock(&client_map_mutex);
+        if(clint_fdtoname.find(resp.fd)==clint_fdtoname.end()){
+            pthread_mutex_unlock(&client_map_mutex);
+            continue;
+        }
+        pthread_mutex_unlock(&client_map_mutex);
         if(!sendMessage(resp.fd, resp.out)){
             int err = errno;
-            // 对于 Broken pipe (EPIPE) 或 Connection reset (ECONNRESET)，
+            // 对于 Broken pipe (E PIPE) 或 Connection reset (ECONNRESET)，
             // 说明客户端已主动断开，这是高并发下的正常现象，记录为 DEBUG 即可，避免污染 ERROR 日志
             if (err == EPIPE || err == ECONNRESET) {
                 LOG_DEBUG("Client disconnected while sending response to fd=" + to_string(resp.fd));

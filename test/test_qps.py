@@ -5,9 +5,9 @@ import struct
 
 # ===== 配置 =====
 HOST = "127.0.0.1"      # 如 "121.41.85.94" 或 "172.26.179.107"
-PORT = 9000               # Nginx stream 端口 (9000) 或 C++ 端口 (6000)
-CLIENTS = 100             # 并发连接数
-DURATION = 10             # 压测持续时间（秒）
+PORT = 6000               # Nginx stream 端口 (9000) 或 C++ 端口 (6000)
+CLIENTS = 20           # 并发连接数
+DURATION = 5             # 压测持续时间（秒）
 
 # 按你聊天协议构造一条业务消息
 PAYLOAD_STR = "heartbeat|"   # C++ 会按 '|' 拆分的文本命令
