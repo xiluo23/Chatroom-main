@@ -1723,7 +1723,6 @@ int main(int argc,char*argv[]){
     // 在销毁日志系统之前停止所有后台服务，确保日志记录完整
     ParserPool::getInstance()->stop();
     DbHandle::getInstance()->stop();
-    redis_.stop();
     
     Logger::destroy();
     return 0;
