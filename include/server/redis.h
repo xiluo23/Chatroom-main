@@ -9,11 +9,14 @@
 #include <queue>
 #include <condition_variable>
 #include <atomic>
+#include <vector>
+#include <unordered_map>
 #include "Config.h"
+#include"Logger.h"
 using namespace std;
 
 /*
-redis作为集群服务器通信的基于发布-订阅消息队列
+redis作为集群服务器通信的基于发布-订阅消息队列和缓存层
 */
 class Redis
 {
@@ -39,11 +42,44 @@ public:
     // 初始化向业务层上报通道消息的回调对象
     void init_notify_handler(function<void(int, string)> fn);
 
+    // 检查连接健康状态
+    bool isConnected();
+    
+    // 手动触发重连
+    bool reconnect();
+
+    // ==================== 缓存操作接口 ====================
+    
+    string get(const string &key);
+    bool set(const string &key, const string &value, int expire_sec = -1);
+    bool del(const string &key);
+    bool expire(const string &key, int expire_sec);
+    bool exists(const string &key);
+    
+    // Hash 操作
+    bool hset(const string &key, const string &field, const string &value);
+    string hget(const string &key, const string &field);
+    unordered_map<string, string> hgetall(const string &key);
+    bool hdel(const string &key, const string &field);
+    bool hexists(const string &key, const string &field);
+    
+    // Set 操作
+    bool sadd(const string &key, const string &value);
+    bool srem(const string &key, const string &value);
+    bool sismember(const string &key, const string &value);
+    vector<string> smembers(const string &key);
+    
+    // List 操作
+    bool lpush(const string &key, const string &value);
+    bool rpush(const string &key, const string &value);
+    vector<string> lrange(const string &key, int start, int stop);
+    int llen(const string &key);
+
 private:
     enum class CmdType { SUB, UNSUB };
     struct Cmd { CmdType type; int channel; };
 
-    // hiredis同步上下文对象，负责publish消息
+    // hiredis同步上下文对象，负责publish消息和缓存操作
     redisContext *_publish_context;
 
     // hiredis同步上下文对象，负责subscribe消息
@@ -59,8 +95,18 @@ private:
     atomic<bool> _running{false};
     thread _sub_thread; // 订阅线程对象
     
-    void process_pending_commands();
+    // 缓存操作的互斥锁
+    mutex _cache_mutex;
     
+    // 重连相关
+    std::string _redis_host;
+    int _redis_port;
+    int _reconnect_interval_ms = 5000;  // 5秒重连间隔
+    std::thread _keepalive_thread;
+    std::atomic<bool> _keepalive_running{false};
+    
+    void process_pending_commands();
+    void keepAliveLoop();
 };
 
 #endif

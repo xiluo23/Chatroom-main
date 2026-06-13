@@ -16,6 +16,7 @@ Redis::Redis()
 Redis::~Redis()
 {
     _running = false;
+    _keepalive_running = false;
 
     _cmd_cv.notify_all();
 
@@ -23,14 +24,17 @@ Redis::~Redis()
     {
         _sub_thread.join();
     }
+    
+    if (_keepalive_thread.joinable())
+    {
+        _keepalive_thread.join();
+    }
 
     if (_subcribe_context)
     {
         redisFree(_subcribe_context);
         _subcribe_context = nullptr;
     }
-
-
 
     if (_publish_context)
     {
@@ -44,43 +48,127 @@ Redis::~Redis()
 bool Redis::connect()
 {
     Config* conf = Config::getInstance();
-    string host = conf->getString("redis_host", "127.0.0.1");
-    int port = conf->getInt("redis_port", 6379);
+    _redis_host = conf->getString("redis_host", "127.0.0.1");
+    _redis_port = conf->getInt("redis_port", 6379);
+    _reconnect_interval_ms = conf->getInt("redis_reconnect_interval", 5000);
 
-    // 负责publish发布消息的上下文连接
-    _publish_context = redisConnect(host.c_str(), port);
-    if (nullptr == _publish_context)
+    if (!connectInternal()) {
+        return false;
+    }
+
+    // 启动保活线程
+    _keepalive_running = true;
+    _keepalive_thread = thread([&] {
+        keepAliveLoop();
+    });
+
+    LOG_INFO("connect redis-server success!");
+    return true;
+}
+
+bool Redis::connectInternal()
+{
+    // 负责publish发布消息和缓存操作的上下文连接
+    _publish_context = redisConnect(_redis_host.c_str(), _redis_port);
+    if (nullptr == _publish_context || _publish_context->err != 0)
     {
-        cerr << "connect redis failed!" << endl;
+        if (_publish_context) {
+            LOG_ERROR("Failed to connect Redis (publish): " + string(_publish_context->errstr));
+            redisFree(_publish_context);
+            _publish_context = nullptr;
+        }
         return false;
     }
 
     // 负责subscribe订阅消息的上下文连接
-    _subcribe_context = redisConnect(host.c_str(), port);
-    if (nullptr == _subcribe_context)
+    _subcribe_context = redisConnect(_redis_host.c_str(), _redis_port);
+    if (nullptr == _subcribe_context || _subcribe_context->err != 0)
     {
-        cerr << "connect redis failed!" << endl;
+        if (_subcribe_context) {
+            LOG_ERROR("Failed to connect Redis (subscribe): " + string(_subcribe_context->errstr));
+            redisFree(_subcribe_context);
+            _subcribe_context = nullptr;
+        }
+        if (_publish_context) {
+            redisFree(_publish_context);
+            _publish_context = nullptr;
+        }
         return false;
     }
+    
     // 设置订阅上下文读取超时，避免长期阻塞无法处理命令队列
     timeval tv; tv.tv_sec = 1; tv.tv_usec = 0;
     redisSetTimeout(_subcribe_context, tv);
 
     // 在单独的线程中，监听通道上的事件，有消息给业务层进行上报
-    _running = true;
-    _sub_thread = thread([&]() {
-        observer_channel_message();
-    });
-
-    LOG_INFO("connect redis-server success!");
-
+    if (!_running) {
+        _running = true;
+        _sub_thread = thread([&] {
+            observer_channel_message();
+        });
+    }
+    
     return true;
+}
+
+bool Redis::isConnected()
+{
+    if (!_publish_context || _publish_context->err != 0) return false;
+    if (!_subcribe_context || _subcribe_context->err != 0) return false;
+    
+    // 测试连接
+    lock_guard<mutex> lock(_cache_mutex);
+    redisReply* r = (redisReply*)redisCommand(_publish_context, "PING");
+    if (!r) return false;
+    bool ok = (r->type == REDIS_REPLY_STATUS && strcasecmp(r->str, "PONG") == 0);
+    freeReplyObject(r);
+    return ok;
+}
+
+bool Redis::reconnect()
+{
+    LOG_WARN("Attempting to reconnect to Redis...");
+    
+    // 停止旧的连接
+    _running = false;
+    if (_sub_thread.joinable()) _sub_thread.join();
+    
+    if (_publish_context) {
+        redisFree(_publish_context);
+        _publish_context = nullptr;
+    }
+    if (_subcribe_context) {
+        redisFree(_subcribe_context);
+        _subcribe_context = nullptr;
+    }
+    
+    // 重新连接
+    return connectInternal();
+}
+
+void Redis::keepAliveLoop()
+{
+    while (_keepalive_running) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(_reconnect_interval_ms));
+        
+        if (!isConnected()) {
+            LOG_WARN("Redis connection lost, attempting reconnect...");
+            if (reconnect()) {
+                LOG_INFO("Redis reconnected successfully!");
+                // 注意：重连后需要重新订阅之前的频道
+                // 这里简化处理，实际项目中应该保存订阅列表并重新订阅
+            } else {
+                LOG_ERROR("Redis reconnect failed");
+            }
+        }
+    }
 }
 
 // 向redis指定的通道channel发布消息
 bool Redis::publish(int channel, string message)
 {
     if (!_running) return false;
+    lock_guard<mutex> lk(_cache_mutex);
     redisReply *reply = (redisReply *)redisCommand(_publish_context, "PUBLISH %d %s", channel, message.c_str());
     if (nullptr == reply)
     {
@@ -161,10 +249,6 @@ void Redis::process_pending_commands()
                 return; // 连接断开，停止处理后续命令
             }
         }
-        
-        // 移除这里的 redisGetReply。
-        // 我们在 observer_channel_message 的主循环中统一处理所有回复。
-        // 这样可以避免在消息和确认同时到达时发生回复消耗错位（同步错误）。
     }
 }
 
@@ -183,18 +267,14 @@ void Redis::observer_channel_message()
         {
             if (reply == nullptr) continue;
 
-            // 订阅收到的消息是一个带三个元素的数组
-            // 无论是 "message" (业务数据), "subscribe" (确认), 还是 "unsubscribe" (确认)
             if (reply->type == REDIS_REPLY_ARRAY && reply->elements == 3)
             {
-                // 必须严格检查每个 element 的类型，防止非字符串类型导致内存损坏
                 if (reply->element[0] && reply->element[0]->type == REDIS_REPLY_STRING && reply->element[0]->str)
                 {
                     const char* type_str = reply->element[0]->str;
                     
                     if (strcasecmp(type_str, "message") == 0)
                     {
-                        // 业务消息：[ "message", channel, payload ]
                         if (reply->element[1] && reply->element[1]->type == REDIS_REPLY_STRING && reply->element[1]->str &&
                             reply->element[2] && reply->element[2]->type == REDIS_REPLY_STRING && reply->element[2]->str)
                         {
@@ -203,9 +283,6 @@ void Redis::observer_channel_message()
                     }
                     else if (strcasecmp(type_str, "subscribe") == 0 || strcasecmp(type_str, "unsubscribe") == 0)
                     {
-                        // 确认消息：[ "subscribe"/"unsubscribe", channel, total_count ]
-                        // element[1] 是字符串，但 element[2] 是整数。
-                        // 我们只需要消费掉它，不需要额外处理。
                         LOG_DEBUG("Redis command confirmed: " + string(type_str));
                     }
                 }
@@ -216,19 +293,15 @@ void Redis::observer_channel_message()
         }
         else
         {
-            // 读取失败（可能是超时或暂时性错误），继续下一轮
             if (this->_subcribe_context->err != REDIS_ERR_IO && this->_subcribe_context->err != REDIS_ERR_EOF)
             {
-                // 严重错误（如协议错误），退出循环
                 cerr << "redisGetReply error: " << this->_subcribe_context->errstr << endl;
                 break;
             }
-            //如果是超时，重置错误标志
             if (this->_subcribe_context->err == REDIS_ERR_IO)
             {
                 this->_subcribe_context->err = 0;
             }
-            // 留出时间让其他线程入队命令
             unique_lock<mutex> lk(_cmd_mutex);
             _cmd_cv.wait_for(lk, chrono::milliseconds(50));
         }
@@ -241,5 +314,292 @@ void Redis::init_notify_handler(function<void(int,string)> fn)
 {
     this->_notify_message_handler = fn;
 }
+
+// ==================== 缓存操作实现 ====================
+
+bool Redis::set(const string &key, const string &value, int expire_sec)
+{
+    lock_guard<mutex> lk(_cache_mutex);
+    redisReply *reply;
+    if (expire_sec > 0)
+    {
+        reply = (redisReply *)redisCommand(_publish_context, "SET %s %s EX %d", key.c_str(), value.c_str(), expire_sec);
+    }
+    else
+    {
+        reply = (redisReply *)redisCommand(_publish_context, "SET %s %s", key.c_str(), value.c_str());
+    }
+    if (reply == nullptr)
+    {
+        LOG_ERROR("Redis SET command failed for key: " + key,ERR_REDIS);
+        return false;
+    }
+    bool success = (reply->type == REDIS_REPLY_STATUS && strcasecmp(reply->str, "OK") == 0);
+    freeReplyObject(reply);
+    return success;
+}
+
+string Redis::get(const string &key)
+{
+    lock_guard<mutex> lk(_cache_mutex);
+    redisReply *reply = (redisReply *)redisCommand(_publish_context, "GET %s", key.c_str());
+    if (reply == nullptr)
+    {
+        LOG_ERROR("Redis GET command failed for key: " + key, ERR_REDIS);
+        return "";
+    }
+    string result;
+    if (reply->type == REDIS_REPLY_STRING)
+    {
+        result = reply->str;
+    }
+    freeReplyObject(reply);
+    return result;
+}
+
+bool Redis::del(const string &key)
+{
+    lock_guard<mutex> lk(_cache_mutex);
+    redisReply *reply = (redisReply *)redisCommand(_publish_context, "DEL %s", key.c_str());
+    if (reply == nullptr)
+    {
+        LOG_ERROR("Redis DEL command failed for key: " + key,ERR_REDIS);
+        return false;
+    }
+    bool success = (reply->type == REDIS_REPLY_INTEGER && reply->integer >= 0);
+    freeReplyObject(reply);
+    return success;
+}
+
+bool Redis::expire(const string &key, int expire_sec)
+{
+    lock_guard<mutex> lk(_cache_mutex);
+    redisReply *reply = (redisReply *)redisCommand(_publish_context, "EXPIRE %s %d", key.c_str(), expire_sec);
+    if (reply == nullptr)
+    {
+        LOG_ERROR("Redis EXPIRE command failed for key: " + key,ERR_REDIS);
+        return false;
+    }
+    bool success = (reply->type == REDIS_REPLY_INTEGER && reply->integer == 1);
+    freeReplyObject(reply);
+    return success;
+}
+
+bool Redis::exists(const string &key)
+{
+    lock_guard<mutex> lk(_cache_mutex);
+    redisReply *reply = (redisReply *)redisCommand(_publish_context, "EXISTS %s", key.c_str());
+    if (reply == nullptr)
+    {
+        return false;
+    }
+    bool exists = (reply->type == REDIS_REPLY_INTEGER && reply->integer == 1);
+    freeReplyObject(reply);
+    return exists;
+}
+
+bool Redis::hset(const string &key, const string &field, const string &value)
+{
+    lock_guard<mutex> lk(_cache_mutex);
+    redisReply *reply = (redisReply *)redisCommand(_publish_context, "HSET %s %s %s", key.c_str(), field.c_str(), value.c_str());
+    if (reply == nullptr)
+    {
+        LOG_ERROR("Redis HSET command failed for key: " + key + ", field: " + field,ERR_REDIS);
+        return false;
+    }
+    bool success = (reply->type == REDIS_REPLY_INTEGER);
+    freeReplyObject(reply);
+    return success;
+}
+
+string Redis::hget(const string &key, const string &field)
+{
+    lock_guard<mutex> lk(_cache_mutex);
+    redisReply *reply = (redisReply *)redisCommand(_publish_context, "HGET %s %s", key.c_str(), field.c_str());
+    if (reply == nullptr || reply->type != REDIS_REPLY_STRING)
+    {
+        if (reply) freeReplyObject(reply);
+        return "";
+    }
+    string result = reply->str;
+    freeReplyObject(reply);
+    return result;
+}
+
+unordered_map<string, string> Redis::hgetall(const string &key)
+{
+    lock_guard<mutex> lk(_cache_mutex);
+    unordered_map<string, string> result;
+    redisReply *reply = (redisReply *)redisCommand(_publish_context, "HGETALL %s", key.c_str());
+    if (reply == nullptr || reply->type != REDIS_REPLY_ARRAY)
+    {
+        if (reply) freeReplyObject(reply);
+        return result;
+    }
+    for (size_t i = 0; i < reply->elements; i += 2)
+    {
+        if (i + 1 < reply->elements && 
+            reply->element[i]->type == REDIS_REPLY_STRING && 
+            reply->element[i + 1]->type == REDIS_REPLY_STRING)
+        {
+            result[reply->element[i]->str] = reply->element[i + 1]->str;
+        }
+    }
+    freeReplyObject(reply);
+    return result;
+}
+
+bool Redis::hdel(const string &key, const string &field)
+{
+    lock_guard<mutex> lk(_cache_mutex);
+    redisReply *reply = (redisReply *)redisCommand(_publish_context, "HDEL %s %s", key.c_str(), field.c_str());
+    if (reply == nullptr)
+    {
+        LOG_ERROR("Redis HDEL command failed for key: " + key + ", field: " + field,ERR_REDIS);
+        return false;
+    }
+    bool success = (reply->type == REDIS_REPLY_INTEGER && reply->integer >= 0);
+    freeReplyObject(reply);
+    return success;
+}
+
+bool Redis::hexists(const string &key, const string &field)
+{
+    lock_guard<mutex> lk(_cache_mutex);
+    redisReply *reply = (redisReply *)redisCommand(_publish_context, "HEXISTS %s %s", key.c_str(), field.c_str());
+    if (reply == nullptr)
+    {
+        return false;
+    }
+    bool exists = (reply->type == REDIS_REPLY_INTEGER && reply->integer == 1);
+    freeReplyObject(reply);
+    return exists;
+}
+
+bool Redis::sadd(const string &key, const string &value)
+{
+    lock_guard<mutex> lk(_cache_mutex);
+    redisReply *reply = (redisReply *)redisCommand(_publish_context, "SADD %s %s", key.c_str(), value.c_str());
+    if (reply == nullptr)
+    {
+        LOG_ERROR("Redis SADD command failed for key: " + key,ERR_REDIS);
+        return false;
+    }
+    bool success = (reply->type == REDIS_REPLY_INTEGER);
+    freeReplyObject(reply);
+    return success;
+}
+
+bool Redis::srem(const string &key, const string &value)
+{
+    lock_guard<mutex> lk(_cache_mutex);
+    redisReply *reply = (redisReply *)redisCommand(_publish_context, "SREM %s %s", key.c_str(), value.c_str());
+    if (reply == nullptr)
+    {
+        LOG_ERROR("Redis SREM command failed for key: " + key,ERR_REDIS);
+        return false;
+    }
+    bool success = (reply->type == REDIS_REPLY_INTEGER);
+    freeReplyObject(reply);
+    return success;
+}
+
+bool Redis::sismember(const string &key, const string &value)
+{
+    lock_guard<mutex> lk(_cache_mutex);
+    redisReply *reply = (redisReply *)redisCommand(_publish_context, "SISMEMBER %s %s", key.c_str(), value.c_str());
+    if (reply == nullptr)
+    {
+        return false;
+    }
+    bool is_member = (reply->type == REDIS_REPLY_INTEGER && reply->integer == 1);
+    freeReplyObject(reply);
+    return is_member;
+}
+
+vector<string> Redis::smembers(const string &key)
+{
+    lock_guard<mutex> lk(_cache_mutex);
+    vector<string> result;
+    redisReply *reply = (redisReply *)redisCommand(_publish_context, "SMEMBERS %s", key.c_str());
+    if (reply == nullptr || reply->type != REDIS_REPLY_ARRAY)
+    {
+        if (reply) freeReplyObject(reply);
+        return result;
+    }
+    for (size_t i = 0; i < reply->elements; i++)
+    {
+        if (reply->element[i]->type == REDIS_REPLY_STRING)
+        {
+            result.push_back(reply->element[i]->str);
+        }
+    }
+    freeReplyObject(reply);
+    return result;
+}
+
+bool Redis::lpush(const string &key, const string &value)
+{
+    lock_guard<mutex> lk(_cache_mutex);
+    redisReply *reply = (redisReply *)redisCommand(_publish_context, "LPUSH %s %s", key.c_str(), value.c_str());
+    if (reply == nullptr)
+    {
+        LOG_ERROR("Redis LPUSH command failed for key: " + key,ERR_REDIS);
+        return false;
+    }
+    bool success = (reply->type == REDIS_REPLY_INTEGER);
+    freeReplyObject(reply);
+    return success;
+}
+
+bool Redis::rpush(const string &key, const string &value)
+{
+    lock_guard<mutex> lk(_cache_mutex);
+    redisReply *reply = (redisReply *)redisCommand(_publish_context, "RPUSH %s %s", key.c_str(), value.c_str());
+    if (reply == nullptr)
+    {
+        LOG_ERROR("Redis RPUSH command failed for key: " + key,ERR_REDIS);
+        return false;
+    }
+    bool success = (reply->type == REDIS_REPLY_INTEGER);
+    freeReplyObject(reply);
+    return success;
+}
+
+vector<string> Redis::lrange(const string &key, int start, int stop)
+{
+    lock_guard<mutex> lk(_cache_mutex);
+    vector<string> result;
+    redisReply *reply = (redisReply *)redisCommand(_publish_context, "LRANGE %s %d %d", key.c_str(), start, stop);
+    if (reply == nullptr || reply->type != REDIS_REPLY_ARRAY)
+    {
+        if (reply) freeReplyObject(reply);
+        return result;
+    }
+    for (size_t i = 0; i < reply->elements; i++)
+    {
+        if (reply->element[i]->type == REDIS_REPLY_STRING)
+        {
+            result.push_back(reply->element[i]->str);
+        }
+    }
+    freeReplyObject(reply);
+    return result;
+}
+
+int Redis::llen(const string &key)
+{
+    lock_guard<mutex> lk(_cache_mutex);
+    redisReply *reply = (redisReply *)redisCommand(_publish_context, "LLEN %s", key.c_str());
+    if (reply == nullptr || reply->type != REDIS_REPLY_INTEGER)
+    {
+        if (reply) freeReplyObject(reply);
+        return 0;
+    }
+    int len = reply->integer;
+    freeReplyObject(reply);
+    return len;
+}
+
 
 

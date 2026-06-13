@@ -104,7 +104,7 @@ using namespace std;
 // 未分类错误 (10000+)
 #define ERR_UNKNOWN                 10000 // 未知错误
 
-
+#define ERR_REDIS                   10001 // Redis错误
 /**
  * @class ErrorCodeManager
  * @brief 错误码管理器，提供错误码到字符串的映射

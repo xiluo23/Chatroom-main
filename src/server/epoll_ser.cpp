@@ -42,6 +42,216 @@ pthread_mutex_t g_close_conn_mutex;
 pthread_mutex_t redis_mutex;                         // 保护 redis 操作（publish/subscribe/unsubscribe）
 unordered_set<int> redis_subscribed_channels;        // 当前已订阅的用户频道集合
 
+// ==================== Redis 缓存帮助函数 ====================
+
+// 缓存键前缀
+const string CACHE_KEY_USER_PREFIX = "user:";        // user:id -> Hash {name, ...}
+const string CACHE_KEY_USER_ID_PREFIX = "user_id:";  // user_id:name -> int
+const string CACHE_KEY_ONLINE_USERS = "online_users"; // Set
+const string CACHE_KEY_FRIENDS_PREFIX = "friends:";  // friends:user_id -> Set friend_ids
+const string CACHE_KEY_CONV_MEMBERS_PREFIX = "conv_members:"; // conv_members:conv_id -> Set user_ids
+const string CACHE_KEY_USER_GROUPS_PREFIX = "user_groups:"; // user_groups:user_id -> String "conv_id:name;conv_id:name"
+
+// 缓存过期时间（秒）
+const int CACHE_USER_EXPIRE = 3600;        // 用户信息缓存1小时
+const int CACHE_FRIENDS_EXPIRE = 1800;     // 好友列表缓存30分钟
+const int CACHE_CONV_MEMBERS_EXPIRE = 900; // 会话成员缓存15分钟
+const int CACHE_USER_GROUPS_EXPIRE = 600;  // 用户群组缓存10分钟
+
+// 通过用户名获取用户ID，优先查Redis
+int cache_get_user_id(const string& username, MyDb* db_conn) {
+    string key = CACHE_KEY_USER_ID_PREFIX + username;
+    string id_str = redis_.hget(key, "id");
+    if (!id_str.empty()) {
+        return stoi(id_str);
+    }
+    // 缓存未命中，查数据库
+    int user_id = db_conn->get_id(username.c_str());
+    if (user_id != -1) {
+        // 写入缓存
+        redis_.hset(key, "id", to_string(user_id));
+        redis_.expire(key, CACHE_USER_EXPIRE);
+    }
+    return user_id;
+}
+
+// 通过用户ID获取用户名，优先查Redis
+string cache_get_user_name(int user_id, MyDb* db_conn) {
+    string key = CACHE_KEY_USER_PREFIX + to_string(user_id);
+    string name = redis_.hget(key, "name");
+    if (!name.empty()) {
+        return name;
+    }
+    // 缓存未命中，查数据库
+    name = db_conn->get_name(user_id);
+    if (!name.empty()) {
+        // 写入缓存
+        redis_.hset(key, "name", name);
+        redis_.expire(key, CACHE_USER_EXPIRE);
+    }
+    return name;
+}
+
+// 设置用户在线状态
+bool cache_set_user_online(int user_id, bool is_online) {
+    string key = CACHE_KEY_ONLINE_USERS;
+    if (is_online) {
+        // 设置用户在线，并附带服务器标识
+        redis_.sadd(key, to_string(user_id));
+        // 单独设置用户的在线状态和所在服务器
+        string user_online_key = "user:online:" + to_string(user_id);
+        Config* conf = Config::getInstance();
+        string server_id = conf->getString("server_id", "server-1");
+        redis_.set(user_online_key, server_id, 300); // 5分钟过期，心跳刷新
+        return true;
+    } else {
+        redis_.srem(key, to_string(user_id));
+        string user_online_key = "user:online:" + to_string(user_id);
+        redis_.del(user_online_key);
+        return true;
+    }
+}
+
+// 刷新用户在线状态过期时间
+bool cache_refresh_user_online(int user_id) {
+    string user_online_key = "user:online:" + to_string(user_id);
+    return redis_.expire(user_online_key, 300); // 5分钟
+}
+
+// 检查用户是否在线（优先查Redis）
+bool cache_is_user_online(int user_id) {
+    string key = CACHE_KEY_ONLINE_USERS;
+    return redis_.sismember(key, to_string(user_id));
+}
+
+// 获取所有在线用户（从Redis）
+vector<string> cache_get_all_online_users() {
+    return redis_.smembers(CACHE_KEY_ONLINE_USERS);
+}
+
+// 获取用户的好友列表，优先查Redis
+vector<int> cache_get_friends(int user_id, MyDb* db_conn) {
+    string key = CACHE_KEY_FRIENDS_PREFIX + to_string(user_id);
+    vector<string> friend_id_strs = redis_.smembers(key);
+    vector<int> friend_ids;
+    
+    if (!friend_id_strs.empty()) {
+        for (const string& id_str : friend_id_strs) {
+            friend_ids.push_back(stoi(id_str));
+        }
+        return friend_ids;
+    }
+    
+    // 缓存未命中，查数据库
+    string sql = "select friend_id from friend_relation where user_id=" + to_string(user_id) + " and status='accepted'";
+    string result;
+    if (db_conn->select_many_SQL(sql, result)) {
+        // 解析结果并写入缓存
+        char* saveptr = nullptr;
+        char* token = strtok_r((char*)result.c_str(), ";", &saveptr);
+        while (token) {
+            int fid = atoi(token);
+            friend_ids.push_back(fid);
+            redis_.sadd(key, to_string(fid));
+            token = strtok_r(nullptr, ";", &saveptr);
+        }
+        redis_.expire(key, CACHE_FRIENDS_EXPIRE);
+    }
+    
+    return friend_ids;
+}
+
+// 检查是否为好友，优先查Redis
+bool cache_is_friend(int user_id1, int user_id2, MyDb* db_conn) {
+    string key = CACHE_KEY_FRIENDS_PREFIX + to_string(user_id1);
+    if (redis_.sismember(key, to_string(user_id2))) {
+        return true;
+    }
+    
+    // 缓存未命中，查数据库
+    string sql = "select 1 from friend_relation where user_id=" + to_string(user_id1) + 
+                 " and friend_id=" + to_string(user_id2) + " and status='accepted' limit 1";
+    string result;
+    if (db_conn->select_one_SQL(sql, result)) {
+        // 写入缓存
+        redis_.sadd(key, to_string(user_id2));
+        redis_.expire(key, CACHE_FRIENDS_EXPIRE);
+        return true;
+    }
+    return false;
+}
+
+// 使好友缓存失效（当添加/删除好友时调用）
+void cache_invalidate_friends(int user_id) {
+    string key = CACHE_KEY_FRIENDS_PREFIX + to_string(user_id);
+    redis_.del(key);
+}
+
+// 获取会话成员，优先查Redis
+vector<int> cache_get_conversation_members(int conv_id, MyDb* db_conn) {
+    string key = CACHE_KEY_CONV_MEMBERS_PREFIX + to_string(conv_id);
+    vector<string> member_id_strs = redis_.smembers(key);
+    vector<int> member_ids;
+    
+    if (!member_id_strs.empty()) {
+        for (const string& id_str : member_id_strs) {
+            member_ids.push_back(stoi(id_str));
+        }
+        return member_ids;
+    }
+    
+    // 缓存未命中，查数据库
+    string sql = "select user_id from conversation_member where conversation_id=" + to_string(conv_id);
+    string result;
+    if (db_conn->select_many_SQL(sql, result)) {
+        char* saveptr = nullptr;
+        char* token = strtok_r((char*)result.c_str(), ";", &saveptr);
+        while (token) {
+            int mid = atoi(token);
+            member_ids.push_back(mid);
+            redis_.sadd(key, to_string(mid));
+            token = strtok_r(nullptr, ";", &saveptr);
+        }
+        redis_.expire(key, CACHE_CONV_MEMBERS_EXPIRE);
+    }
+    
+    return member_ids;
+}
+
+// 使会话成员缓存失效（当添加/删除成员时调用）
+void cache_invalidate_conversation_members(int conv_id) {
+    string key = CACHE_KEY_CONV_MEMBERS_PREFIX + to_string(conv_id);
+    redis_.del(key);
+}
+
+// 获取用户加入的群组，优先查Redis
+string cache_get_user_groups(int user_id, MyDb* db_conn) {
+    string key = CACHE_KEY_USER_GROUPS_PREFIX + to_string(user_id);
+    
+    // 先查缓存
+    string cached = redis_.get(key);
+    if (!cached.empty()) {
+        return cached;
+    }
+    
+    // 缓存未命中，查数据库
+    string sql = "select c.conversation_id, c.name from conversation c join conversation_member m on c.conversation_id = m.conversation_id where m.user_id = " + to_string(user_id);
+    string ret;
+    if (db_conn->select_many_SQL(sql, ret)) {
+        // 写入缓存
+        redis_.set(key, ret, CACHE_USER_GROUPS_EXPIRE);
+    }
+    return ret;
+}
+
+// 使用户群组缓存失效
+void cache_invalidate_user_groups(int user_id) {
+    string key = CACHE_KEY_USER_GROUPS_PREFIX + to_string(user_id);
+    redis_.del(key);
+}
+
+// ==================== 缓存帮助函数结束 ====================
+
 // SIGINT 标志位
 volatile sig_atomic_t stop_server = 0;
 
@@ -241,8 +451,11 @@ void close_clint(int epoll_fd,int clint_fd){
         
         int uid = g_close_conn.get_id(username.c_str());
         if (uid != -1) {
-            string sql = "update user_status set is_online = 0, last_active = NOW() where user_id ="+to_string(uid);
+            string sql = "update user_status set is_online = 0, last_active = NOW() where user_id = "+to_string(uid);
             DbHandle::getInstance()->add_task(sql);
+            
+            // 更新Redis在线状态缓存
+            cache_set_user_online(uid, false);
             
             // Redis 退订
             pthread_mutex_lock(&redis_mutex);
@@ -413,7 +626,6 @@ void process_clint_data(Task&task){
         unique_ptr<struct crypt_data> data(new struct crypt_data);
         memset(data.get(), 0, sizeof(struct crypt_data));
         
-        // 使用 CpuScopedGuard 限制高并发下的哈希计算，防止 2 核环境下 Reactor 被饿死
         char* hashed;
         {
             CpuScopedGuard cpu_guard;
@@ -518,6 +730,16 @@ void process_clint_data(Task&task){
                     clint_nametofd[string(username)]=clint_fd;
                     pthread_mutex_unlock(&client_map_mutex);
                     int uid=conn->get_id(username);
+                    // 更新Redis在线状态缓存
+                    cache_set_user_online(uid, true);
+                    // 缓存用户信息
+                    string user_key = CACHE_KEY_USER_PREFIX + to_string(uid);
+                    redis_.hset(user_key, "name", string(username));
+                    redis_.expire(user_key, CACHE_USER_EXPIRE);
+                    string user_id_key = CACHE_KEY_USER_ID_PREFIX + string(username);
+                    redis_.hset(user_id_key, "id", to_string(uid));
+                    redis_.expire(user_id_key, CACHE_USER_EXPIRE);
+                    
                     LOG_OPERATION(uid,"login","username: "+string(username));
                     char msg[]="sign_in|1|ok";
                     en_resp(msg,clint_fd);
@@ -566,18 +788,32 @@ void process_clint_data(Task&task){
         }
     }
     else if(strcmp(cmd,"show_online_user")==0){
-        string sql="select user_name from user join user_status on user.user_id = user_status.user_id where is_online = 1";
-        string ret="";
-        if(conn->select_many_SQL(sql,ret)){
-            char msg[BUF_SIZE];
-            snprintf(msg,BUF_SIZE-1,"show_online_user|1|%s",ret.c_str());
-            msg[strlen(msg)]=0;
-            en_resp((char*)msg,clint_fd);
+        vector<string> online_user_ids = cache_get_all_online_users();
+        string ret = "";
+        if (!online_user_ids.empty()) {
+            // 从缓存的用户ID获取用户名
+            for (const string& id_str : online_user_ids) {
+                int uid = stoi(id_str);
+                string name = cache_get_user_name(uid, conn);
+                if (!name.empty()) {
+                    if (!ret.empty()) ret += ";";
+                    ret += name;
+                }
+            }
         }
-        else{
-            char msg[]="show_online_user|0|请重试";
-            en_resp(msg,clint_fd);
+        if (ret.empty()) {
+            // 缓存为空或用户信息不存在，回退到数据库查询
+            string sql="select user_name from user join user_status on user.user_id = user_status.user_id where is_online = 1";
+            if(!conn->select_many_SQL(sql, ret)) {
+                char msg[]="show_online_user|0|请重试";
+                en_resp(msg,clint_fd);
+                return;
+            }
         }
+        char msg[BUF_SIZE];
+        snprintf(msg,BUF_SIZE-1,"show_online_user|1|%s",ret.c_str());
+        msg[strlen(msg)]=0;
+        en_resp((char*)msg,clint_fd);
     }
     else if(strcmp(cmd,"show_groups")==0){
         pthread_mutex_lock(&client_map_mutex);
@@ -586,11 +822,10 @@ void process_clint_data(Task&task){
         pthread_mutex_unlock(&client_map_mutex);
         if(my_name.empty()) return;
 
-        int my_id = conn->get_id(my_name.c_str());
-        // 查询用户加入的所有群组
-        string sql = "select c.conversation_id, c.name from conversation c join conversation_member m on c.conversation_id = m.conversation_id where m.user_id = " + to_string(my_id);
-        string ret;
-        if(conn->select_many_SQL(sql, ret)){
+        int my_id = cache_get_user_id(my_name, conn);
+        // 优先查缓存获取用户加入的所有群组
+        string ret = cache_get_user_groups(my_id, conn);
+        if(!ret.empty()){
             char msg[BUF_SIZE];
             snprintf(msg, BUF_SIZE-1, "show_groups|1|%s", ret.c_str());
             en_resp(msg, clint_fd);
@@ -618,27 +853,24 @@ void process_clint_data(Task&task){
             en_resp(msg, clint_fd);
             return;
         }
-        string receiver_id=to_string(conn->get_id(to));
-        if(receiver_id=="-1"){//发送给的用户不存在
+        // 使用缓存获取用户 ID
+        int receiver_id_int = cache_get_user_id(string(to), conn);
+        if(receiver_id_int == -1){//发送给的用户不存在
             char msg[BUF_SIZE];
             snprintf(msg,BUF_SIZE-1,"single_chat|0|%s","用户不存在");
             msg[strlen(msg)]=0;
             en_resp(msg,clint_fd);
             return ;
         }
-        string sender_id=to_string(conn->get_id(from));
+        string receiver_id = to_string(receiver_id_int);
+        int sender_id_int = cache_get_user_id(string(from), conn);
+        string sender_id=to_string(sender_id_int);
 
-        // 只允许好友之间进行单播
-        {
-            string friend_ok;
-            string check_sql =
-                "select 1 from friend_relation "
-                "where user_id=" + sender_id + " and friend_id=" + receiver_id + " and status='accepted' limit 1";
-            if(!conn->select_one_SQL(check_sql, friend_ok)){
-                char msg[]="single_chat|0|请先添加好友";
-                en_resp(msg, clint_fd);
-                return;
-            }
+        // 只允许好友之间进行单播，使用缓存检查
+        if(!cache_is_friend(sender_id_int, receiver_id_int, conn)){
+            char msg[]="single_chat|0|请先添加好友";
+            en_resp(msg, clint_fd);
+            return;
         }
 
         string group_type="single";
@@ -705,7 +937,9 @@ void process_clint_data(Task&task){
             en_resp(msg, clint_fd);
             return ;
         }
-        string sender_id=to_string(conn->get_id(from));
+        // 使用缓存获取发送者 ID
+        int sender_id_int = cache_get_user_id(string(from), conn);
+        string sender_id=to_string(sender_id_int);
         // 这里不能复用 saveptr，否则会破坏上面 cmd 的分割状态
         char* names_saveptr = NULL;
         char* to=strtok_r(usernames," ",&names_saveptr);
@@ -716,11 +950,13 @@ void process_clint_data(Task&task){
                 continue;
             }
 
-            string receiver_id=to_string(conn->get_id(to));
-            if(receiver_id=="-1"){//发送给的用户不存在
+            // 使用缓存获取接收者 ID
+            int receiver_id_int = cache_get_user_id(string(to), conn);
+            if(receiver_id_int == -1){//发送给的用户不存在
                 to=strtok_r(NULL," ",&names_saveptr);
                 continue;
             }
+            string receiver_id = to_string(receiver_id_int);
             string is_delivered="1";
             string group_type="multi";
             pthread_mutex_lock(&client_map_mutex);
@@ -743,12 +979,12 @@ void process_clint_data(Task&task){
 
             if(!online){
                 // 发布到远端用户频道（包含msgid）
-                int rid = conn->get_id(to);
-                if (rid != -1) {
+                // 我们已经有 receiver_id_int 了，直接使用
+                if (receiver_id_int != -1) {
                     char pub_msg[BUF_SIZE];
                     snprintf(pub_msg, BUF_SIZE-1, "multi_chat|2|%lld|%s;%s", msgid, from, text);
                     pthread_mutex_lock(&redis_mutex);
-                    redis_.publish(rid, string(pub_msg));
+                    redis_.publish(receiver_id_int, string(pub_msg));
                     pthread_mutex_unlock(&redis_mutex);
                 }
             }
