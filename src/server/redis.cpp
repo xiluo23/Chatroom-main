@@ -73,7 +73,7 @@ bool Redis::connectInternal()
     if (nullptr == _publish_context || _publish_context->err != 0)
     {
         if (_publish_context) {
-            LOG_ERROR("Failed to connect Redis (publish): " + string(_publish_context->errstr));
+            LOG_ERROR("Failed to connect Redis (publish): " + string(_publish_context->errstr),ERR_REDIS);
             redisFree(_publish_context);
             _publish_context = nullptr;
         }
@@ -85,7 +85,7 @@ bool Redis::connectInternal()
     if (nullptr == _subcribe_context || _subcribe_context->err != 0)
     {
         if (_subcribe_context) {
-            LOG_ERROR("Failed to connect Redis (subscribe): " + string(_subcribe_context->errstr));
+            LOG_ERROR("Failed to connect Redis (subscribe): " + string(_subcribe_context->errstr),ERR_REDIS);
             redisFree(_subcribe_context);
             _subcribe_context = nullptr;
         }
@@ -158,7 +158,7 @@ void Redis::keepAliveLoop()
                 // 注意：重连后需要重新订阅之前的频道
                 // 这里简化处理，实际项目中应该保存订阅列表并重新订阅
             } else {
-                LOG_ERROR("Redis reconnect failed");
+                LOG_ERROR("Redis reconnect failed",ERR_REDIS);
             }
         }
     }

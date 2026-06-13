@@ -75,6 +75,9 @@ public:
     vector<string> lrange(const string &key, int start, int stop);
     int llen(const string &key);
 
+    
+    bool connectInternal();
+
 private:
     enum class CmdType { SUB, UNSUB };
     struct Cmd { CmdType type; int channel; };
